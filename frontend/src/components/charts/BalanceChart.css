@@ -1,0 +1,68 @@
+.balance-chart {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  margin-bottom: 24px;
+}
+
+.chart-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 20px 0;
+  text-align: center;
+}
+
+.chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.chart-tooltip {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.tooltip-label {
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 8px 0;
+  font-size: 14px;
+}
+
+.tooltip-item {
+  margin: 4px 0;
+  font-size: 13px;
+}
+
+.tooltip-solde {
+  color: #3b82f6;
+  font-weight: 500;
+}
+
+.tooltip-recettes {
+  color: #10b981;
+}
+
+.tooltip-depenses {
+  color: #ef4444;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .balance-chart {
+    padding: 16px;
+  }
+  
+  .chart-title {
+    font-size: 16px;
+  }
+}

@@ -1,0 +1,21 @@
+/* App Component Styles */
+
+.app-container {
+  min-height: 100vh;
+  background-color: #f9fafb;
+}
+
+.app-loading {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f9fafb;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .app-container {
+    padding: 0;
+  }
+}

@@ -40,10 +40,21 @@ const testConnection = async () => {
 // Fonction utilitaire pour exécuter des requêtes
 const executeQuery = async (query, params = []) => {
   try {
-    const [results] = await promisePool.execute(query, params);
-    return results;
+    console.log('🔍 Executing query:', query.substring(0, 100) + '...');
+    console.log('📊 With params:', params);
+    
+    // Si pas de paramètres, utiliser query() au lieu d'execute()
+    if (params.length === 0) {
+      const [results] = await promisePool.query(query);
+      return results;
+    } else {
+      const [results] = await promisePool.execute(query, params);
+      return results;
+    }
   } catch (error) {
     console.error('❌ Erreur lors de l\'exécution de la requête:', error.message);
+    console.error('❌ Query:', query);
+    console.error('❌ Params:', params);
     throw error;
   }
 };
@@ -57,7 +68,12 @@ const executeTransaction = async (queries) => {
     
     const results = [];
     for (const { query, params } of queries) {
-      const [result] = await connection.execute(query, params || []);
+      let result;
+      if (params && params.length > 0) {
+        [result] = await connection.execute(query, params);
+      } else {
+        [result] = await connection.query(query);
+      }
       results.push(result);
     }
     

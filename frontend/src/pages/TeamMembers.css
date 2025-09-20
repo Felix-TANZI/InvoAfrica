@@ -10,6 +10,7 @@
   min-height: 400px;
 }
 
+/* Header */
 .page-header {
   margin-bottom: 32px;
 }
@@ -52,8 +53,9 @@
   transform: translateY(-1px);
 }
 
+/* Recherche */
 .search-section {
-  margin-bottom: 32px;
+  margin-bottom: 24px;
 }
 
 .search-input {
@@ -83,25 +85,90 @@
   border-color: #3b82f6;
 }
 
-.members-grid {
+/* Cartes de statistiques */
+.stats-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.stat-card {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-left: 4px solid transparent;
+}
+
+.stat-card.active {
+  border-left-color: #3b82f6;
+}
+
+.stat-card.active svg {
+  color: #3b82f6;
+}
+
+.stat-card.contributions {
+  border-left-color: #10b981;
+}
+
+.stat-card.contributions svg {
+  color: #10b981;
+}
+
+.stat-card.penalty {
+  border-left-color: #f59e0b;
+}
+
+.stat-card.penalty svg {
+  color: #f59e0b;
+}
+
+.stat-number {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.stat-label {
+  display: block;
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+/* Grille des membres */
+.team-members-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
   gap: 24px;
   margin-bottom: 32px;
 }
 
-.member-card {
+.team-member-card {
   background: white;
   padding: 24px;
   border-radius: 12px;
   box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
   position: relative;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: all 0.2s ease;
+  border-left: 4px solid #3b82f6;
 }
 
-.member-card:hover {
+.team-member-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.team-member-card.inactive {
+  border-left-color: #ef4444;
+  opacity: 0.7;
 }
 
 .member-avatar {
@@ -116,17 +183,45 @@
   margin-bottom: 16px;
 }
 
+.team-member-card.inactive .member-avatar {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+}
+
+.member-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
 .member-info h3 {
   font-size: 18px;
   font-weight: 600;
   color: #1f2937;
-  margin: 0 0 4px 0;
+  margin: 0;
 }
 
 .position {
   color: #6b7280;
   font-size: 14px;
   margin: 0 0 16px 0;
+  font-weight: 500;
+}
+
+.position-icon {
+  flex-shrink: 0;
+}
+
+.position-icon.president {
+  color: #fbbf24;
+}
+
+.position-icon.chief {
+  color: #10b981;
+}
+
+.position-icon.member {
+  color: #6b7280;
 }
 
 .member-details {
@@ -142,30 +237,72 @@
   color: #6b7280;
 }
 
+.detail-item.penalty {
+  color: #f59e0b;
+  font-weight: 500;
+}
+
 .detail-item svg {
   flex-shrink: 0;
 }
 
-.member-meta {
-  display: flex;
-  justify-content: space-between;
+/* Statut des cotisations */
+.contribution-status {
+  margin-bottom: 16px;
+}
+
+.contribution-badge {
+  display: inline-flex;
   align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 16px;
   font-size: 12px;
-  color: #9ca3af;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.contribution-badge.paid {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.contribution-badge.advance {
+  background: #dbeafe;
+  color: #1e40af;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.contribution-badge.advance small {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.contribution-badge.pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.member-meta {
+  margin-bottom: 12px;
 }
 
 .status {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
   border-radius: 12px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
 }
 
 .status.active {
-  background: #dcfce7;
-  color: #166534;
+  background: #dbeafe;
+  color: #1e40af;
 }
 
 .status.inactive {
@@ -173,13 +310,32 @@
   color: #991b1b;
 }
 
+.member-notes {
+  background: #f9fafb;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border-left: 3px solid #e5e7eb;
+}
+
+.member-notes p {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* Actions */
 .member-actions {
   position: absolute;
   top: 16px;
   right: 16px;
 }
 
-.action-btn {
+.actions-dropdown {
+  position: relative;
+}
+
+.action-trigger {
   width: 32px;
   height: 32px;
   border: none;
@@ -189,17 +345,59 @@
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
+  background: #f3f4f6;
+  color: #6b7280;
 }
 
-.action-btn.edit {
-  background: #dbeafe;
-  color: #1d4ed8;
+.action-trigger:hover {
+  background: #e5e7eb;
+  color: #374151;
 }
 
-.action-btn.edit:hover {
-  background: #bfdbfe;
+.actions-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  padding: 8px;
+  min-width: 140px;
+  z-index: 10;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.2s ease;
 }
 
+.actions-dropdown:hover .actions-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.actions-menu button {
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  text-align: left;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #374151;
+  transition: background 0.2s;
+}
+
+.actions-menu button:hover {
+  background: #f3f4f6;
+}
+
+/* État vide */
 .empty-state {
   text-align: center;
   padding: 80px 20px;
@@ -214,15 +412,56 @@
 .empty-state h3 {
   color: #374151;
   margin-bottom: 8px;
+  font-size: 18px;
+}
+
+.empty-state p {
+  margin-bottom: 24px;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* Responsive */
 @media (max-width: 768px) {
-  .members-grid {
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .stats-cards {
     grid-template-columns: 1fr;
   }
   
-  .member-card {
+  .team-members-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .team-member-card {
     padding: 20px;
+  }
+  
+  .search-input {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .team-member-card {
+    padding: 16px;
+  }
+  
+  .header-content h1 {
+    font-size: 24px;
+  }
+  
+  .stat-card {
+    padding: 16px;
+  }
+  
+  .member-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
 }

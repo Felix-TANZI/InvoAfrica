@@ -1,3 +1,13 @@
+/*   Projet : InvoAfrica
+     @Auteur : NZIKO Felix Andre
+     Email : tanzifelix@gmail.com
+     version : beta 1.0
+
+     Instagram : felix_tanzi
+     GitHub : Felix-TANZI
+     Linkedin : Felix TANZI */
+
+
 const express = require('express');
 const router = express.Router();
 
@@ -5,9 +15,9 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const { authenticateToken, adminOnly } = require('../middleware/auth');
 
-// =====================================================
+
 // ROUTES PUBLIQUES (sans authentification)
-// =====================================================
+
 
 /**
  * @route   POST /api/auth/login
@@ -17,9 +27,9 @@ const { authenticateToken, adminOnly } = require('../middleware/auth');
  */
 router.post('/login', authController.login);
 
-// =====================================================
+
 // ROUTES PROTÉGÉES (avec authentification)
-// =====================================================
+
 
 /**
  * @route   GET /api/auth/profile
@@ -46,9 +56,9 @@ router.post('/change-password', authenticateToken, authController.changePassword
  */
 router.get('/verify', authenticateToken, authController.verifyToken);
 
-// =====================================================
+
 // ROUTES ADMIN SEULEMENT
-// =====================================================
+
 
 /**
  * @route   POST /api/auth/register

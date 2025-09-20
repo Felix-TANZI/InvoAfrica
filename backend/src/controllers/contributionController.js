@@ -1,3 +1,13 @@
+/*   Projet : InvoAfrica
+     @Auteur : NZIKO Felix Andre
+     Email : tanzifelix@gmail.com
+     version : beta 1.0
+
+     Instagram : felix_tanzi
+     GitHub : Felix-TANZI
+     Linkedin : Felix TANZI */
+
+
 const { executeQuery, executeTransaction } = require('../config/database');
 const { sendResponse, calculateLateDays } = require('../utils/helpers');
 
@@ -5,9 +15,9 @@ const { sendResponse, calculateLateDays } = require('../utils/helpers');
 const DEFAULT_TEAM_CONTRIBUTION = 2000;
 const DEFAULT_ADHERENT_CONTRIBUTION = 500;
 
-// =====================================================
+
 // GÉNÉRATION AUTOMATIQUE DES COTISATIONS
-// =====================================================
+
 
 // Générer les cotisations team members pour un mois donné
 const generateTeamContributions = async (req, res) => {
@@ -142,9 +152,9 @@ const generateCurrentMonthContributions = async (req, res) => {
   }
 };
 
-// =====================================================
+
 // GESTION DES PAIEMENTS
-// =====================================================
+
 
 // Marquer une cotisation team member comme payée
 const markTeamContributionPaid = async (req, res) => {
@@ -254,9 +264,9 @@ const markAdherentContributionPaid = async (req, res) => {
   }
 };
 
-// =====================================================
+
 // RÉCUPÉRATION DES DONNÉES
-// =====================================================
+
 
 // Récupérer les cotisations team members par mois
 const getTeamContributions = async (req, res) => {

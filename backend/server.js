@@ -1,3 +1,13 @@
+/*   Projet : InvoAfrica
+     @Auteur : NZIKO Felix Andre
+     Email : tanzifelix@gmail.com
+     version : beta 1.0
+
+     Instagram : felix_tanzi
+     GitHub : Felix-TANZI
+     Linkedin : Felix TANZI */
+
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -14,9 +24,9 @@ const { startScheduler } = require('./src/utils/scheduler');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// =====================================================
+
 // MIDDLEWARES DE SÉCURITÉ
-// =====================================================
+
 
 // Helmet pour la sécurité des headers HTTP
 app.use(helmet());
@@ -40,9 +50,9 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// =====================================================
+
 // MIDDLEWARES POUR PARSING
-// =====================================================
+
 
 // Parser pour JSON (limite à 10mb)
 app.use(express.json({ limit: '10mb' }));
@@ -53,9 +63,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Servir les fichiers statiques (uploads)
 app.use('/uploads', express.static(path.join(__dirname, 'src/uploads')));
 
-// =====================================================
+
 // ROUTES
-// =====================================================
+
 
 // Route de santé pour vérifier que l'API fonctionne
 app.get('/health', (req, res) => {
@@ -87,9 +97,9 @@ app.use('/api/members', require('./src/routes/memberRoutes'));
 app.use('/api/dashboard', require('./src/routes/dashboardRoutes'));
 // app.use('/api/reports', require('./src/routes/reportRoutes'));
 
-// =====================================================
+
 // GESTION DES ERREURS
-// =====================================================
+
 
 // Middleware pour les routes non trouvées
 app.use((req, res, next) => {
@@ -128,9 +138,9 @@ app.use((err, req, res, next) => {
   });
 });
 
-// =====================================================
+
 // DÉMARRAGE DU SERVEUR
-// =====================================================
+
 
 const startServer = async () => {
   try {

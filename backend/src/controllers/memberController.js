@@ -1,9 +1,18 @@
+/*   Projet : InvoAfrica
+     @Auteur : NZIKO Felix Andre
+     Email : tanzifelix@gmail.com
+     version : beta 1.0
+
+     Instagram : felix_tanzi
+     GitHub : Felix-TANZI
+     Linkedin : Felix TANZI */
+
+
 const { executeQuery } = require('../config/database');
 const { sanitizeInput, isValidEmail, isValidPhone, sendResponse } = require('../utils/helpers');
 
-// =====================================================
+
 // TEAM MEMBERS (Membres du Bureau)
-// =====================================================
 
 // Récupérer tous les team members
 const getTeamMembers = async (req, res) => {
@@ -164,9 +173,8 @@ const updateTeamMember = async (req, res) => {
   }
 };
 
-// =====================================================
+
 // ADHERENTS
-// =====================================================
 
 // Récupérer tous les adhérents
 const getAdherents = async (req, res) => {

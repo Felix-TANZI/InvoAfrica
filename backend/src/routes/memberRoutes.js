@@ -1,12 +1,21 @@
+/*   Projet : InvoAfrica
+     @Auteur : NZIKO Felix Andre
+     Email : tanzifelix@gmail.com
+     version : beta 1.0
+
+     Instagram : felix_tanzi
+     GitHub : Felix-TANZI
+     Linkedin : Felix TANZI */
+
 const express = require('express');
 const router = express.Router();
 
 const memberController = require('../controllers/memberController');
 const { authenticateToken, adminOnly, allRoles } = require('../middleware/auth');
 
-// =====================================================
+
 // TEAM MEMBERS (Membres du Bureau)
-// =====================================================
+
 
 /**
  * @route   GET /api/members/team
@@ -32,9 +41,9 @@ router.post('/team', authenticateToken, adminOnly, memberController.createTeamMe
  */
 router.put('/team/:id', authenticateToken, adminOnly, memberController.updateTeamMember);
 
-// =====================================================
+
 // ADHERENTS
-// =====================================================
+
 
 /**
  * @route   GET /api/members/adherents

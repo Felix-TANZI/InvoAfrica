@@ -1,12 +1,22 @@
+/*   Projet : InvoAfrica
+     @Auteur : NZIKO Felix Andre
+     Email : tanzifelix@gmail.com
+     version : beta 1.0
+
+     Instagram : felix_tanzi
+     GitHub : Felix-TANZI
+     Linkedin : Felix TANZI */
+
+
 const express = require('express');
 const router = express.Router();
 
 const contributionController = require('../controllers/contributionController');
 const { authenticateToken, adminOnly, allRoles } = require('../middleware/auth');
 
-// =====================================================
+
 // GÉNÉRATION DES COTISATIONS
-// =====================================================
+
 
 /**
  * @route   POST /api/contributions/generate/team
@@ -31,9 +41,9 @@ router.post('/generate/adherents', authenticateToken, adminOnly, contributionCon
  */
 router.post('/generate/current', authenticateToken, adminOnly, contributionController.generateCurrentMonthContributions);
 
-// =====================================================
+
 // GESTION DES PAIEMENTS
-// =====================================================
+
 
 /**
  * @route   PUT /api/contributions/team/:id/pay
@@ -51,9 +61,9 @@ router.put('/team/:id/pay', authenticateToken, allRoles, contributionController.
  */
 router.put('/adherents/:id/pay', authenticateToken, allRoles, contributionController.markAdherentContributionPaid);
 
-// =====================================================
+
 // RÉCUPÉRATION DES DONNÉES
-// =====================================================
+
 
 /**
  * @route   GET /api/contributions/team

@@ -1,3 +1,13 @@
+/*   Projet : InvoAfrica
+     @Auteur : NZIKO Felix Andre
+     Email : tanzifelix@gmail.com
+     version : beta 1.0
+
+     Instagram : felix_tanzi
+     GitHub : Felix-TANZI
+     Linkedin : Felix TANZI */
+
+
 const { executeQuery } = require('../config/database');
 const { sanitizeInput, sendResponse } = require('../utils/helpers');
 

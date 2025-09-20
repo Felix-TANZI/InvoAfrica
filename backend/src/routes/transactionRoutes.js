@@ -1,3 +1,13 @@
+/*   Projet : InvoAfrica
+     @Auteur : NZIKO Felix Andre
+     Email : tanzifelix@gmail.com
+     version : beta 1.0
+
+     Instagram : felix_tanzi
+     GitHub : Felix-TANZI
+     Linkedin : Felix TANZI */
+
+
 const express = require('express');
 const router = express.Router();
 
@@ -5,9 +15,9 @@ const router = express.Router();
 const transactionController = require('../controllers/transactionController');
 const { authenticateToken, adminOnly, allRoles } = require('../middleware/auth');
 
-// =====================================================
+
 // ROUTES TRANSACTIONS
-// =====================================================
+
 
 /**
  * @route   GET /api/transactions

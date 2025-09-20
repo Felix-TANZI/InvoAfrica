@@ -1,3 +1,13 @@
+/*   Projet : InvoAfrica
+     @Auteur : NZIKO Felix Andre
+     Email : tanzifelix@gmail.com
+     version : beta 1.0
+
+     Instagram : felix_tanzi
+     GitHub : Felix-TANZI
+     Linkedin : Felix TANZI */
+
+
 const { executeQuery, executeTransaction } = require('../config/database');
 const { 
   generateReference, 
@@ -19,11 +29,14 @@ const getTransactions = async (req, res) => {
       search 
     } = req.query;
 
-    const offset = (page - 1) * limit;
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const offset = (pageNum - 1) * limitNum;
+    
     let whereConditions = [];
     let queryParams = [];
 
-    // Construction dynamique des filtres
+    // Construction dynamique des filtres avec gestion propre des types
     if (status && ['en_attente', 'validee', 'annulee'].includes(status)) {
       whereConditions.push('t.status = ?');
       queryParams.push(status);
@@ -34,33 +47,45 @@ const getTransactions = async (req, res) => {
       queryParams.push(type);
     }
 
-    if (category_id && !isNaN(category_id)) {
+    if (category_id && !isNaN(category_id) && category_id !== '') {
       whereConditions.push('t.category_id = ?');
       queryParams.push(parseInt(category_id));
     }
 
-    if (date_from) {
+    if (date_from && date_from !== '') {
       whereConditions.push('t.transaction_date >= ?');
       queryParams.push(date_from);
     }
 
-    if (date_to) {
+    if (date_to && date_to !== '') {
       whereConditions.push('t.transaction_date <= ?');
       queryParams.push(date_to);
     }
 
-    if (search) {
+    if (search && search.trim() !== '') {
       whereConditions.push('(t.description LIKE ? OR t.contact_person LIKE ? OR t.reference LIKE ?)');
-      const searchTerm = `%${search}%`;
+      const searchTerm = `%${search.trim()}%`;
       queryParams.push(searchTerm, searchTerm, searchTerm);
     }
 
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
-    // Requête principale avec jointures
+    // Requête principale avec jointures - LIMIT et OFFSET directement dans la chaîne
     const transactionsQuery = `
       SELECT 
-        t.*,
+        t.id,
+        t.reference,
+        t.category_id,
+        t.amount,
+        t.type,
+        t.description,
+        t.transaction_date,
+        t.payment_mode,
+        t.status,
+        t.contact_person,
+        t.notes,
+        t.created_at,
+        t.updated_at,
         c.name as category_name,
         c.type as category_type,
         creator.name as created_by_name,
@@ -71,7 +96,7 @@ const getTransactions = async (req, res) => {
       LEFT JOIN users validator ON t.validated_by = validator.id
       ${whereClause}
       ORDER BY t.created_at DESC
-      LIMIT ? OFFSET ?
+      LIMIT ${limitNum} OFFSET ${offset}
     `;
 
     // Requête pour le count total
@@ -81,29 +106,35 @@ const getTransactions = async (req, res) => {
       ${whereClause}
     `;
 
-    // Exécution des requêtes
+    console.log('🔍 Query transactions:', transactionsQuery);
+    console.log('📊 Params transactions:', queryParams);
+    console.log('🔍 Query count:', countQuery);
+    console.log('📊 Params count:', queryParams);
+
+    // Exécution des requêtes - même paramètres pour les deux requêtes
     const [transactions, countResult] = await Promise.all([
-      executeQuery(transactionsQuery, [...queryParams, parseInt(limit), offset]),
+      executeQuery(transactionsQuery, queryParams),
       executeQuery(countQuery, queryParams)
     ]);
 
-    const total = countResult[0].total;
-    const totalPages = Math.ceil(total / limit);
+    const total = countResult[0]?.total || 0;
+    const totalPages = Math.ceil(total / limitNum);
 
     return sendResponse(res, 200, 'Transactions récupérées avec succès', {
       transactions,
       pagination: {
-        currentPage: parseInt(page),
+        currentPage: pageNum,
         totalPages,
         totalItems: total,
-        itemsPerPage: parseInt(limit),
-        hasNext: page < totalPages,
-        hasPrev: page > 1
+        itemsPerPage: limitNum,
+        hasNext: pageNum < totalPages,
+        hasPrev: pageNum > 1
       }
     });
 
   } catch (error) {
     console.error('❌ Erreur lors de la récupération des transactions:', error.message);
+    console.error('❌ Stack trace:', error.stack);
     return sendResponse(res, 500, 'Erreur interne du serveur');
   }
 };
@@ -129,7 +160,7 @@ const getTransactionById = async (req, res) => {
       LEFT JOIN users creator ON t.created_by = creator.id
       LEFT JOIN users validator ON t.validated_by = validator.id
       WHERE t.id = ?
-    `, [id]);
+    `, [parseInt(id)]);
 
     if (transactions.length === 0) {
       return sendResponse(res, 404, 'Transaction non trouvée');
@@ -183,8 +214,8 @@ const createTransaction = async (req, res) => {
 
     // Vérifier que la catégorie existe et correspond au type
     const categories = await executeQuery(
-      'SELECT id, type FROM categories WHERE id = ? AND is_active = true',
-      [category_id]
+      'SELECT id, type FROM categories WHERE id = ? AND is_active = 1',
+      [parseInt(category_id)]
     );
 
     if (categories.length === 0) {
@@ -221,9 +252,16 @@ const createTransaction = async (req, res) => {
         notes, created_by, status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'en_attente')
     `, [
-      uniqueReference, category_id, parseFloat(amount), type, 
-      cleanDescription, transaction_date, payment_mode, 
-      cleanContactPerson, cleanNotes, req.user.id
+      uniqueReference, 
+      parseInt(category_id), 
+      parseFloat(amount), 
+      type, 
+      cleanDescription, 
+      transaction_date, 
+      payment_mode, 
+      cleanContactPerson, 
+      cleanNotes, 
+      parseInt(req.user.id)
     ]);
 
     // Récupérer la transaction créée
@@ -270,7 +308,7 @@ const updateTransaction = async (req, res) => {
     // Vérifier que la transaction existe
     const existingTransactions = await executeQuery(
       'SELECT id, status, created_by FROM transactions WHERE id = ?',
-      [id]
+      [parseInt(id)]
     );
 
     if (existingTransactions.length === 0) {
@@ -289,30 +327,13 @@ const updateTransaction = async (req, res) => {
       return sendResponse(res, 403, 'Vous n\'êtes pas autorisé à modifier cette transaction');
     }
 
-    // Validation des nouvelles données (même logique que create)
-    if (category_id && isNaN(category_id)) {
-      return sendResponse(res, 400, 'ID de catégorie invalide');
-    }
-
-    if (amount && (isNaN(amount) || parseFloat(amount) <= 0)) {
-      return sendResponse(res, 400, 'Le montant doit être un nombre positif');
-    }
-
-    if (type && !['recette', 'depense'].includes(type)) {
-      return sendResponse(res, 400, 'Type de transaction invalide');
-    }
-
-    if (payment_mode && !['cash', 'om', 'momo', 'virement', 'cheque'].includes(payment_mode)) {
-      return sendResponse(res, 400, 'Mode de paiement invalide');
-    }
-
     // Construire la requête de mise à jour dynamiquement
     let updateFields = [];
     let updateParams = [];
 
     if (category_id) {
       updateFields.push('category_id = ?');
-      updateParams.push(category_id);
+      updateParams.push(parseInt(category_id));
     }
     if (amount) {
       updateFields.push('amount = ?');
@@ -348,7 +369,7 @@ const updateTransaction = async (req, res) => {
     }
 
     updateFields.push('updated_at = CURRENT_TIMESTAMP');
-    updateParams.push(id);
+    updateParams.push(parseInt(id));
 
     // Exécuter la mise à jour
     await executeQuery(`
@@ -367,7 +388,7 @@ const updateTransaction = async (req, res) => {
       LEFT JOIN categories c ON t.category_id = c.id
       LEFT JOIN users creator ON t.created_by = creator.id
       WHERE t.id = ?
-    `, [id]);
+    `, [parseInt(id)]);
 
     return sendResponse(res, 200, 'Transaction modifiée avec succès', {
       transaction: updatedTransaction[0]
@@ -391,7 +412,7 @@ const validateTransaction = async (req, res) => {
     // Vérifier que la transaction existe
     const existingTransactions = await executeQuery(
       'SELECT id, status FROM transactions WHERE id = ?',
-      [id]
+      [parseInt(id)]
     );
 
     if (existingTransactions.length === 0) {
@@ -409,7 +430,7 @@ const validateTransaction = async (req, res) => {
       UPDATE transactions 
       SET status = 'validee', validated_by = ?, validated_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `, [req.user.id, id]);
+    `, [parseInt(req.user.id), parseInt(id)]);
 
     // Récupérer la transaction validée
     const validatedTransaction = await executeQuery(`
@@ -423,7 +444,7 @@ const validateTransaction = async (req, res) => {
       LEFT JOIN users creator ON t.created_by = creator.id
       LEFT JOIN users validator ON t.validated_by = validator.id
       WHERE t.id = ?
-    `, [id]);
+    `, [parseInt(id)]);
 
     return sendResponse(res, 200, 'Transaction validée avec succès', {
       transaction: validatedTransaction[0]
@@ -448,7 +469,7 @@ const cancelTransaction = async (req, res) => {
     // Vérifier que la transaction existe
     const existingTransactions = await executeQuery(
       'SELECT id, status FROM transactions WHERE id = ?',
-      [id]
+      [parseInt(id)]
     );
 
     if (existingTransactions.length === 0) {
@@ -472,7 +493,7 @@ const cancelTransaction = async (req, res) => {
       UPDATE transactions 
       SET status = 'annulee', notes = CONCAT(IFNULL(notes, ''), '\n', ?), updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `, [cancelNote, id]);
+    `, [cancelNote, parseInt(id)]);
 
     return sendResponse(res, 200, 'Transaction annulée avec succès');
 
@@ -491,16 +512,16 @@ const getTransactionStats = async (req, res) => {
 
     if (year) {
       if (month) {
-        dateFilter = 'AND YEAR(transaction_date) = ? AND MONTH(transaction_date) = ?';
-        params = [year, month];
+        dateFilter = 'WHERE YEAR(transaction_date) = ? AND MONTH(transaction_date) = ?';
+        params = [parseInt(year), parseInt(month)];
       } else {
-        dateFilter = 'AND YEAR(transaction_date) = ?';
-        params = [year];
+        dateFilter = 'WHERE YEAR(transaction_date) = ?';
+        params = [parseInt(year)];
       }
     }
 
     // Statistiques générales
-    const stats = await executeQuery(`
+    const statsQuery = `
       SELECT 
         COUNT(*) as total_transactions,
         SUM(CASE WHEN type = 'recette' AND status = 'validee' THEN amount ELSE 0 END) as total_recettes,
@@ -509,24 +530,28 @@ const getTransactionStats = async (req, res) => {
         SUM(CASE WHEN status = 'validee' THEN 1 ELSE 0 END) as validated_count,
         SUM(CASE WHEN status = 'annulee' THEN 1 ELSE 0 END) as cancelled_count
       FROM transactions 
-      WHERE 1=1 ${dateFilter}
-    `, params);
+      ${dateFilter}
+    `;
+
+    const stats = await executeQuery(statsQuery, params);
 
     // Statistiques par catégorie
-    const categoryStats = await executeQuery(`
+    const categoryStatsQuery = `
       SELECT 
         c.name as category_name,
         c.type as category_type,
         COUNT(t.id) as transaction_count,
         SUM(CASE WHEN t.status = 'validee' THEN t.amount ELSE 0 END) as total_amount
       FROM categories c
-      LEFT JOIN transactions t ON c.id = t.category_id ${dateFilter.replace('AND', 'AND')}
-      WHERE c.is_active = true
+      LEFT JOIN transactions t ON c.id = t.category_id ${dateFilter ? 'AND ' + dateFilter.substring(6) : ''}
+      WHERE c.is_active = 1
       GROUP BY c.id, c.name, c.type
       ORDER BY total_amount DESC
-    `, params);
+    `;
 
-    const soldeActuel = stats[0].total_recettes - stats[0].total_depenses;
+    const categoryStats = await executeQuery(categoryStatsQuery, params);
+
+    const soldeActuel = (stats[0].total_recettes || 0) - (stats[0].total_depenses || 0);
 
     return sendResponse(res, 200, 'Statistiques récupérées avec succès', {
       general: {

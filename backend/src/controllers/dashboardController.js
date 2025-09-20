@@ -174,6 +174,57 @@ const getDashboardStats = async (req, res) => {
   }
 };
 
+// Récupérer les transactions récentes
+const getRecentTransactions = async (req, res) => {
+  try {
+    const { limit = 10 } = req.query;
+    
+    // Validation du paramètre limit
+    const limitNum = parseInt(limit);
+    if (isNaN(limitNum) || limitNum < 1 || limitNum > 50) {
+      return sendResponse(res, 400, 'Le paramètre limit doit être un nombre entre 1 et 50');
+    }
+    
+    // Requête pour récupérer les transactions récentes avec toutes les informations nécessaires
+    const recentTransactions = await executeQuery(`
+      SELECT 
+        t.id,
+        t.reference,
+        t.amount,
+        t.type,
+        t.description,
+        t.transaction_date,
+        t.payment_mode,
+        t.status,
+        t.contact_person,
+        t.notes,
+        t.created_at,
+        t.updated_at,
+        c.name as category_name,
+        c.type as category_type,
+        creator.name as created_by_name,
+        validator.name as validated_by_name,
+        t.validated_at
+      FROM transactions t
+      LEFT JOIN categories c ON t.category_id = c.id
+      LEFT JOIN users creator ON t.created_by = creator.id
+      LEFT JOIN users validator ON t.validated_by = validator.id
+      ORDER BY t.created_at DESC
+      LIMIT ?
+    `, [limitNum]);
+
+    return sendResponse(res, 200, 'Transactions récentes récupérées avec succès', {
+      transactions: recentTransactions,
+      count: recentTransactions.length,
+      limit: limitNum
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur lors de la récupération des transactions récentes:', error.message);
+    return sendResponse(res, 500, 'Erreur interne du serveur');
+  }
+};
+
 // Récupérer les membres avec le plus de retard
 const getLateContributions = async (req, res) => {
   try {
@@ -276,7 +327,7 @@ const getFinancialReport = async (req, res) => {
     const targetYear = year || currentDate.getFullYear();
     const targetMonth = month || (currentDate.getMonth() + 1);
 
-    // Résumé financier global
+    // Résumé financier global du mois
     const financialSummary = await executeQuery(`
       SELECT 
         'Recettes Transactions' as source,
@@ -343,6 +394,23 @@ const getFinancialReport = async (req, res) => {
       LIMIT 10
     `, [targetYear, targetMonth, targetYear, targetMonth]);
 
+    // Répartition par catégorie des transactions
+    const categoryBreakdown = await executeQuery(`
+      SELECT 
+        c.name as category_name,
+        c.type as category_type,
+        COUNT(t.id) as transaction_count,
+        COALESCE(SUM(CASE WHEN t.status = 'validee' THEN t.amount ELSE 0 END), 0) as total_amount
+      FROM categories c
+      LEFT JOIN transactions t ON c.id = t.category_id 
+        AND YEAR(t.transaction_date) = ? AND MONTH(t.transaction_date) = ?
+        AND t.status = 'validee'
+      WHERE c.is_active = 1
+      GROUP BY c.id, c.name, c.type
+      HAVING total_amount > 0
+      ORDER BY total_amount DESC
+    `, [targetYear, targetMonth]);
+
     return sendResponse(res, 200, 'Rapport financier généré', {
       period: {
         year: parseInt(targetYear),
@@ -350,7 +418,8 @@ const getFinancialReport = async (req, res) => {
         month_name: new Date(targetYear, targetMonth - 1).toLocaleDateString('fr-FR', { month: 'long' })
       },
       financial_summary: financialSummary,
-      top_contributors: topContributors
+      top_contributors: topContributors,
+      category_breakdown: categoryBreakdown
     });
 
   } catch (error) {

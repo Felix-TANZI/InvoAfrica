@@ -22,7 +22,11 @@ import {
   MoreVertical,
   Crown,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  Target,
+  Sparkles,
+  Clock,
+  CheckCircle2
 } from 'lucide-react';
 import { memberAPI, contributionAPI } from '../services/api';
 import { usePermissions } from '../hooks/useAuth';
@@ -37,6 +41,7 @@ const TeamMembers = () => {
   const [contributions, setContributions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
   
   // États pour le formulaire
   const [showTeamMemberForm, setShowTeamMemberForm] = useState(false);
@@ -134,9 +139,13 @@ const TeamMembers = () => {
   };
 
   const getPositionIcon = (position) => {
-    if (position?.toLowerCase().includes('président')) return <Crown size={16} className="position-icon president" />;
-    if (position?.toLowerCase().includes('chef') || position?.toLowerCase().includes('directeur')) return <TrendingUp size={16} className="position-icon chief" />;
-    return <Users size={16} className="position-icon member" />;
+    if (position?.toLowerCase().includes('président')) {
+      return <Crown size={16} className="position-icon modern president" />;
+    }
+    if (position?.toLowerCase().includes('chef') || position?.toLowerCase().includes('directeur')) {
+      return <TrendingUp size={16} className="position-icon modern chief" />;
+    }
+    return <Users size={16} className="position-icon modern member" />;
   };
 
   const filteredTeamMembers = teamMembers.filter(member =>
@@ -146,16 +155,41 @@ const TeamMembers = () => {
   );
 
   const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('fr-FR');
+    return new Date(date).toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
   };
 
   const formatAmount = (amount) => {
-    return new Intl.NumberFormat('fr-FR').format(amount) + ' FCFA';
+    const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+    if (isNaN(numAmount) || numAmount === null || numAmount === undefined) {
+      return '0 FCFA';
+    }
+    return new Intl.NumberFormat('fr-FR', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(Math.round(numAmount)) + ' FCFA';
+  };
+
+  const formatShortAmount = (amount) => {
+    const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+    if (isNaN(numAmount) || numAmount === null || numAmount === undefined) {
+      return '0';
+    }
+    
+    if (numAmount >= 1000000) {
+      return (numAmount / 1000000).toFixed(1) + 'M';
+    } else if (numAmount >= 1000) {
+      return (numAmount / 1000).toFixed(0) + 'K';
+    }
+    return Math.round(numAmount).toString();
   };
 
   if (loading) {
     return (
-      <div className="team-members-loading">
+      <div className="team-members-loading modern">
         <LoadingSpinner size="large" text="Chargement des membres du bureau..." />
       </div>
     );
@@ -166,16 +200,23 @@ const TeamMembers = () => {
   const totalContributionsPaid = contributions.reduce((sum, c) => sum + (c.amount_paid || 0), 0);
 
   return (
-    <div className="team-members-page">
-      {/* Header */}
-      <div className="page-header">
-        <div className="header-content">
-          <div>
-            <h1>Team Members</h1>
-            <p>Gestion des membres du bureau ({teamMembers.length} membres)</p>
+    <div className="team-members-page modern">
+      {/* Header moderne */}
+      <div className="page-header modern">
+        <div className="header-content modern">
+          <div className="header-text">
+            <h1 className="page-title">Team Members</h1>
+            <p className="page-subtitle">
+              Gestion des membres du bureau
+              <span className="member-count-badge">
+                <Sparkles size={12} />
+                {teamMembers.length} membres
+              </span>
+            </p>
           </div>
+          
           {canManageUsers && (
-            <button className="btn-primary" onClick={handleCreateTeamMember}>
+            <button className="btn-primary modern" onClick={handleCreateTeamMember}>
               <Plus size={20} />
               Nouveau Membre
             </button>
@@ -183,136 +224,164 @@ const TeamMembers = () => {
         </div>
       </div>
 
-      {/* Barre de recherche */}
-      <div className="search-section">
-        <div className="search-input">
-          <Search size={20} />
-          <input
-            type="text"
-            placeholder="Rechercher un membre..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-      </div>
-
-      {/* Statistiques rapides */}
-      <div className="stats-cards">
-        <div className="stat-card active">
-          <UserCheck size={24} />
-          <div>
-            <span className="stat-number">{activeMembers}</span>
-            <span className="stat-label">Membres actifs</span>
-          </div>
-        </div>
-        <div className="stat-card contributions">
-          <DollarSign size={24} />
-          <div>
-            <span className="stat-number">{formatAmount(totalContributionsPaid)}</span>
-            <span className="stat-label">Cotisations collectées</span>
-          </div>
-        </div>
-        <div className="stat-card penalty">
-          <AlertCircle size={24} />
-          <div>
-            <span className="stat-number">{formatAmount(totalPenalties)}</span>
-            <span className="stat-label">Pénalités</span>
+      {/* Barre de recherche moderne */}
+      <div className="search-section modern">
+        <div className="search-container modern">
+          <div className={`search-input modern ${searchFocused ? 'focused' : ''}`}>
+            <Search size={20} className="search-icon" />
+            <input
+              type="text"
+              placeholder="Rechercher un membre..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+            />
           </div>
         </div>
       </div>
 
-      {/* Liste des membres */}
-      <div className="team-members-grid">
-        {filteredTeamMembers.map((member) => {
+      {/* Statistiques rapides modernes */}
+      <div className="stats-cards modern">
+        <div className="stat-card modern active">
+          <div className="stat-card-content">
+            <div className="stat-icon modern active">
+              <UserCheck size={24} />
+            </div>
+            <div className="stat-info">
+              <span className="stat-number modern">{activeMembers}</span>
+              <span className="stat-label modern">Membres actifs</span>
+            </div>
+          </div>
+          <div className="stat-decoration"></div>
+        </div>
+        
+        <div className="stat-card modern contributions">
+          <div className="stat-card-content">
+            <div className="stat-icon modern contributions">
+              <DollarSign size={24} />
+            </div>
+            <div className="stat-info">
+              <span className="stat-number modern">{formatShortAmount(totalContributionsPaid)}</span>
+              <span className="stat-label modern">Cotisations collectées</span>
+            </div>
+          </div>
+          <div className="stat-decoration"></div>
+        </div>
+        
+        <div className="stat-card modern penalty">
+          <div className="stat-card-content">
+            <div className="stat-icon modern penalty">
+              <AlertCircle size={24} />
+            </div>
+            <div className="stat-info">
+              <span className="stat-number modern">{formatShortAmount(totalPenalties)}</span>
+              <span className="stat-label modern">Pénalités</span>
+            </div>
+          </div>
+          <div className="stat-decoration"></div>
+        </div>
+      </div>
+
+      {/* Liste des membres moderne */}
+      <div className="team-members-grid modern">
+        {filteredTeamMembers.map((member, index) => {
           const contributionStatus = getContributionStatus(member.id);
           
           return (
-            <div key={member.id} className={`team-member-card ${!member.is_active ? 'inactive' : ''}`}>
-              <div className="member-avatar">
+            <div 
+              key={member.id} 
+              className={`team-member-card modern ${!member.is_active ? 'inactive' : ''}`}
+              style={{ animationDelay: `${index * 100}ms` }}
+            >
+              <div className="member-avatar modern">
                 <Users size={24} />
               </div>
               
               <div className="member-info">
-                <div className="member-header">
+                <div className="member-header modern">
                   <h3>{member.name}</h3>
                   {getPositionIcon(member.position)}
                 </div>
-                <p className="position">{member.position || 'Membre'}</p>
                 
-                <div className="member-details">
+                <p className="position modern">
+                  {member.position || 'Membre'}
+                </p>
+                
+                <div className="member-details modern">
                   {member.email && (
-                    <div className="detail-item">
+                    <div className="detail-item modern">
                       <Mail size={16} />
                       <span>{member.email}</span>
                     </div>
                   )}
                   
                   {member.phone && (
-                    <div className="detail-item">
+                    <div className="detail-item modern">
                       <Phone size={16} />
                       <span>{member.phone}</span>
                     </div>
                   )}
 
-                  <div className="detail-item">
+                  <div className="detail-item modern">
                     <Calendar size={16} />
                     <span>Inscrit le {formatDate(member.registration_date)}</span>
                   </div>
 
                   {member.penalty_amount > 0 && (
-                    <div className="detail-item penalty">
+                    <div className="detail-item modern penalty">
                       <DollarSign size={16} />
                       <span>Pénalités: {formatAmount(member.penalty_amount)}</span>
                     </div>
                   )}
                 </div>
 
-                {/* Statut des cotisations */}
-                <div className="contribution-status">
+                {/* Statut des cotisations moderne */}
+                <div className="contribution-status modern">
                   {contributionStatus.status === 'paye' && (
-                    <div className="contribution-badge paid">
-                      <UserCheck size={14} />
+                    <div className="contribution-badge modern paid">
+                      <CheckCircle2 size={14} />
                       <span>Cotisation payée</span>
                     </div>
                   )}
                   
                   {contributionStatus.isAdvance && (
-                    <div className="contribution-badge advance">
-                      <TrendingUp size={14} />
+                    <div className="contribution-badge modern advance">
+                      <Target size={14} />
                       <span>Avance: {formatAmount(contributionStatus.amount_paid)}</span>
                       <small>Reste: {formatAmount(contributionStatus.remaining)}</small>
                     </div>
                   )}
                   
                   {contributionStatus.status === 'en_attente' && contributionStatus.amount_paid === 0 && (
-                    <div className="contribution-badge pending">
-                      <AlertCircle size={14} />
+                    <div className="contribution-badge modern pending">
+                      <Clock size={14} />
                       <span>Cotisation en attente</span>
                     </div>
                   )}
                 </div>
                 
-                <div className="member-meta">
-                  <span className={`status ${member.is_active ? 'active' : 'inactive'}`}>
+                <div className="member-meta modern">
+                  <span className={`status modern ${member.is_active ? 'active' : 'inactive'}`}>
                     {member.is_active ? <UserCheck size={14} /> : <UserX size={14} />}
                     {member.is_active ? 'Actif' : 'Inactif'}
                   </span>
                 </div>
 
                 {member.notes && (
-                  <div className="member-notes">
+                  <div className="member-notes modern">
                     <p>{member.notes}</p>
                   </div>
                 )}
               </div>
               
               {canManageUsers && (
-                <div className="member-actions">
-                  <div className="actions-dropdown">
-                    <button className="action-trigger">
+                <div className="member-actions modern">
+                  <div className="actions-dropdown modern">
+                    <button className="action-trigger modern">
                       <MoreVertical size={16} />
                     </button>
-                    <div className="actions-menu">
+                    <div className="actions-menu modern">
                       <button onClick={() => handleEditTeamMember(member)}>
                         <Edit size={16} />
                         Modifier
@@ -330,19 +399,19 @@ const TeamMembers = () => {
         })}
       </div>
 
-      {/* État vide */}
+      {/* État vide moderne */}
       {filteredTeamMembers.length === 0 && !loading && (
-        <div className="empty-state">
-          <Users size={48} />
+        <div className="empty-state modern">
+          <Users size={64} />
           <h3>Aucun membre trouvé</h3>
           <p>
             {searchTerm 
-              ? 'Aucun membre ne correspond à votre recherche.' 
-              : 'Aucun membre du bureau enregistré pour le moment.'
+              ? 'Aucun membre ne correspond à votre recherche. Essayez avec d\'autres mots-clés.' 
+              : 'Aucun membre du bureau enregistré pour le moment. Commencez par ajouter votre premier membre.'
             }
           </p>
           {canManageUsers && !searchTerm && (
-            <button className="btn-primary" onClick={handleCreateTeamMember}>
+            <button className="btn-primary modern" onClick={handleCreateTeamMember}>
               <Plus size={20} />
               Ajouter le premier membre
             </button>

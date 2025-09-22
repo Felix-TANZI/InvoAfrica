@@ -1,7 +1,7 @@
 const { executeQuery } = require('../config/database');
 const { sendResponse, formatAmount } = require('../utils/helpers');
 
-// Récupérer les statistiques globales du dashboard (MISE À JOUR)
+// Récupérer les statistiques globales du dashboard (CORRIGÉ)
 const getDashboardStats = async (req, res) => {
   try {
     const { year, month } = req.query;
@@ -24,8 +24,8 @@ const getDashboardStats = async (req, res) => {
       SELECT 
         COUNT(*) as total_expected,
         SUM(CASE WHEN status = 'paye' THEN 1 ELSE 0 END) as total_paid,
-        SUM(COALESCE(amount_paid, 0)) as amount_collected,
-        SUM(amount) as amount_expected,
+        COALESCE(SUM(COALESCE(amount_paid, 0)), 0) as amount_collected,
+        COALESCE(SUM(amount), 0) as amount_expected,
         SUM(CASE WHEN COALESCE(amount_paid, 0) > 0 AND COALESCE(amount_paid, 0) < amount THEN 1 ELSE 0 END) as partial_payments,
         AVG(COALESCE(amount_paid, 0) / amount * 100) as avg_completion_rate
       FROM team_member_contributions 
@@ -42,8 +42,8 @@ const getDashboardStats = async (req, res) => {
       SELECT 
         COUNT(*) as total_expected,
         SUM(CASE WHEN status = 'paye' THEN 1 ELSE 0 END) as total_paid,
-        SUM(COALESCE(amount_paid, 0)) as amount_collected,
-        SUM(amount) as amount_expected,
+        COALESCE(SUM(COALESCE(amount_paid, 0)), 0) as amount_collected,
+        COALESCE(SUM(amount), 0) as amount_expected,
         SUM(CASE WHEN COALESCE(amount_paid, 0) > 0 AND COALESCE(amount_paid, 0) < amount THEN 1 ELSE 0 END) as partial_payments,
         AVG(COALESCE(amount_paid, 0) / amount * 100) as avg_completion_rate
       FROM adherent_contributions 
@@ -60,8 +60,8 @@ const getDashboardStats = async (req, res) => {
       SELECT 
         COUNT(*) as total_transactions,
         SUM(CASE WHEN status = 'en_attente' THEN 1 ELSE 0 END) as pending_transactions,
-        SUM(CASE WHEN type = 'recette' AND status = 'validee' THEN amount ELSE 0 END) as month_recettes,
-        SUM(CASE WHEN type = 'depense' AND status = 'validee' THEN amount ELSE 0 END) as month_depenses
+        COALESCE(SUM(CASE WHEN type = 'recette' AND status = 'validee' THEN amount ELSE 0 END), 0) as month_recettes,
+        COALESCE(SUM(CASE WHEN type = 'depense' AND status = 'validee' THEN amount ELSE 0 END), 0) as month_depenses
       FROM transactions 
       WHERE YEAR(transaction_date) = ? AND MONTH(transaction_date) = ?
     `, [currentYear, currentMonth]);
@@ -70,13 +70,15 @@ const getDashboardStats = async (req, res) => {
       total_transactions: 0, pending_transactions: 0, month_recettes: 0, month_depenses: 0 
     };
 
-    // 5. Calculs dérivés
-    const totalCotisationsMois = teamStats.amount_collected + adherentStats.amount_collected;
-    const totalCotisationsAttendu = teamStats.amount_expected + adherentStats.amount_expected;
+    // 5. Calculs dérivés (CORRIGÉS)
+    const totalCotisationsMois = parseFloat(teamStats.amount_collected) + parseFloat(adherentStats.amount_collected);
+    const totalCotisationsAttendu = parseFloat(teamStats.amount_expected) + parseFloat(adherentStats.amount_expected);
     const tauxRecouvrementGlobal = totalCotisationsAttendu > 0 ? 
       ((totalCotisationsMois / totalCotisationsAttendu) * 100).toFixed(1) : 0;
 
-    const soldeMois = (transactionStats.month_recettes) - transactionStats.month_depenses;
+    // Calculer les autres recettes (hors cotisations)
+    const autresRecettes = Math.max(0, parseFloat(transactionStats.month_recettes) - totalCotisationsMois);
+    const soldeMois = parseFloat(transactionStats.month_recettes) - parseFloat(transactionStats.month_depenses);
 
     // 6. Évolution des 6 derniers mois avec amount_paid
     const evolutionResult = await executeQuery(`
@@ -124,48 +126,61 @@ const getDashboardStats = async (req, res) => {
       WHERE YEAR(month_year) = ? AND MONTH(month_year) = ? AND a.is_active = TRUE
     `, [currentYear, currentMonth, currentYear, currentMonth]);
 
+    // 8. Formater les réponses avec des valeurs numériques propres
     return sendResponse(res, 200, 'Statistiques dashboard récupérées', {
       global: {
-        solde_global: soldeGlobal,
-        total_recettes_all_time: balanceResult[0].total_recettes,
-        total_depenses_all_time: balanceResult[0].total_depenses
+        solde_global: parseFloat(soldeGlobal),
+        total_recettes_all_time: parseFloat(balanceResult[0].total_recettes),
+        total_depenses_all_time: parseFloat(balanceResult[0].total_depenses)
       },
       mois_courant: {
         year: parseInt(currentYear),
         month: parseInt(currentMonth),
-        solde_mois: soldeMois,
-        cotisations_collectees: totalCotisationsMois,
-        cotisations_attendues: totalCotisationsAttendu,
-        taux_recouvrement: parseFloat(tauxRecouvrementGlobal),
-        recettes_autres: transactionStats.month_recettes - totalCotisationsMois,
-        depenses: transactionStats.month_depenses
+        solde_mois: parseFloat(soldeMois),
+        cotisations_collectees: parseFloat(totalCotisationsMois), // ✅ CORRIGÉ: nombre au lieu de concaténation
+        cotisations_attendues: parseFloat(totalCotisationsAttendu), // ✅ CORRIGÉ: nombre au lieu de concaténation
+        taux_recouvrement: parseFloat(tauxRecouvrementGlobal), // ✅ CORRIGÉ: calcul correct
+        recettes_autres: parseFloat(autresRecettes),
+        depenses: parseFloat(transactionStats.month_depenses)
       },
       team_members: {
-        membres_attendus: teamStats.total_expected,
-        membres_payes: teamStats.total_paid,
-        membres_avec_avance: teamStats.partial_payments,
-        montant_collecte: teamStats.amount_collected,
-        montant_attendu: teamStats.amount_expected,
+        membres_attendus: parseInt(teamStats.total_expected),
+        membres_payes: parseInt(teamStats.total_paid),
+        membres_avec_avance: parseInt(teamStats.partial_payments),
+        montant_collecte: parseFloat(teamStats.amount_collected),
+        montant_attendu: parseFloat(teamStats.amount_expected),
         taux_recouvrement: teamStats.amount_expected > 0 ? 
-          ((teamStats.amount_collected / teamStats.amount_expected) * 100).toFixed(1) : 0,
+          parseFloat(((teamStats.amount_collected / teamStats.amount_expected) * 100).toFixed(1)) : 0,
         taux_completion_moyen: parseFloat(teamStats.avg_completion_rate || 0).toFixed(1)
       },
       adherents: {
-        adherents_attendus: adherentStats.total_expected,
-        adherents_payes: adherentStats.total_paid,
-        adherents_avec_avance: adherentStats.partial_payments,
-        montant_collecte: adherentStats.amount_collected,
-        montant_attendu: adherentStats.amount_expected,
+        adherents_attendus: parseInt(adherentStats.total_expected),
+        adherents_payes: parseInt(adherentStats.total_paid),
+        adherents_avec_avance: parseInt(adherentStats.partial_payments),
+        montant_collecte: parseFloat(adherentStats.amount_collected),
+        montant_attendu: parseFloat(adherentStats.amount_expected),
         taux_recouvrement: adherentStats.amount_expected > 0 ? 
-          ((adherentStats.amount_collected / adherentStats.amount_expected) * 100).toFixed(1) : 0,
+          parseFloat(((adherentStats.amount_collected / adherentStats.amount_expected) * 100).toFixed(1)) : 0,
         taux_completion_moyen: parseFloat(adherentStats.avg_completion_rate || 0).toFixed(1)
       },
       transactions: {
-        total_mois: transactionStats.total_transactions,
-        en_attente: transactionStats.pending_transactions
+        total_mois: parseInt(transactionStats.total_transactions),
+        en_attente: parseInt(transactionStats.pending_transactions)
       },
-      evolution_6_mois: evolutionResult,
-      retards_avances: retardsAvancesResult
+      evolution_6_mois: evolutionResult.map(item => ({
+        year: parseInt(item.year),
+        month: parseInt(item.month),
+        team_collected: parseFloat(item.team_collected || 0),
+        adherent_collected: parseFloat(item.adherent_collected || 0),
+        team_expected: parseFloat(item.team_expected || 0),
+        adherent_expected: parseFloat(item.adherent_expected || 0)
+      })),
+      retards_avances: retardsAvancesResult.map(item => ({
+        type: item.type,
+        en_retard: parseInt(item.en_retard),
+        avec_avance: parseInt(item.avec_avance),
+        montant_restant: parseFloat(item.montant_restant || 0)
+      }))
     });
 
   } catch (error) {

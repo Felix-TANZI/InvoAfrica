@@ -7,7 +7,7 @@
      GitHub : Felix-TANZI
      Linkedin : Felix TANZI */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -27,12 +27,100 @@ import {
   HelpCircle
 } from 'lucide-react';
 import { usePermissions } from '../../hooks/useAuth';
+import { dashboardAPI } from '../../services/api';
 import './Sidebar.css';
 
 const Sidebar = ({ mobile = false, onClose, collapsed = false, onToggle }) => {
   const { hasRole } = usePermissions();
   const location = useLocation();
   const [hoveredItem, setHoveredItem] = useState(null);
+  const [sidebarStats, setSidebarStats] = useState({
+    objectiveRate: 0,
+    totalCollected: 0,
+    loading: true
+  });
+
+  // Récupérer les stats pour la sidebar
+  useEffect(() => {
+    const fetchSidebarStats = async () => {
+      try {
+        console.log('🔄 Chargement stats sidebar...');
+        setSidebarStats(prev => ({ ...prev, loading: true }));
+        
+        const response = await dashboardAPI.getStats();
+        console.log('📊 Réponse API sidebar:', response);
+        
+        if (response.status === 'success') {
+          const data = response.data;
+          
+          // Protection contre les valeurs null/undefined
+          const teamExpected = parseFloat(data.team_members?.montant_attendu || 0);
+          const teamCollected = parseFloat(data.team_members?.montant_collecte || 0);
+          const adherentExpected = parseFloat(data.adherents?.montant_attendu || 0);
+          const adherentCollected = parseFloat(data.adherents?.montant_collecte || 0);
+          
+          // Calcul sécurisé du taux d'objectif global
+          const totalExpected = teamExpected + adherentExpected;
+          const totalCollected = teamCollected + adherentCollected;
+          
+          let objectiveRate = 0;
+          if (totalExpected > 0 && !isNaN(totalExpected) && !isNaN(totalCollected)) {
+            objectiveRate = parseFloat(((totalCollected / totalExpected) * 100).toFixed(1));
+          }
+          
+          console.log('📈 Calculs sidebar:', {
+            teamExpected,
+            teamCollected,
+            adherentExpected, 
+            adherentCollected,
+            totalExpected,
+            totalCollected,
+            objectiveRate
+          });
+          
+          setSidebarStats({
+            objectiveRate: objectiveRate || 0,
+            totalCollected: totalCollected || 0,
+            loading: false
+          });
+        }
+      } catch (error) {
+        console.error('❌ Erreur lors de la récupération des stats sidebar:', error);
+        setSidebarStats({
+          objectiveRate: 0,
+          totalCollected: 0,
+          loading: false
+        });
+      }
+    };
+
+    // Ne charger que si la sidebar n'est pas réduite
+    if (!collapsed) {
+      fetchSidebarStats();
+      
+      // Rafraîchir toutes les 30 secondes
+      const interval = setInterval(fetchSidebarStats, 30000);
+      return () => clearInterval(interval);
+    } else {
+      setSidebarStats(prev => ({ ...prev, loading: false }));
+    }
+  }, [collapsed]);
+
+  const formatShortAmount = (amount) => {
+    const numAmount = parseFloat(amount);
+    
+    // Protection contre NaN, null, undefined
+    if (isNaN(numAmount) || numAmount === null || numAmount === undefined) {
+      return '0';
+    }
+    
+    if (numAmount >= 1000000) {
+      return (numAmount / 1000000).toFixed(1) + 'M';
+    } else if (numAmount >= 1000) {
+      return (numAmount / 1000).toFixed(0) + 'K';
+    }
+    return Math.round(numAmount).toString();
+  };
 
   const navigationItems = [
     { 
@@ -173,7 +261,7 @@ const Sidebar = ({ mobile = false, onClose, collapsed = false, onToggle }) => {
         )}
       </div>
 
-      {/* Stats rapides */}
+      {/* Stats rapides avec vraies données et protection NaN */}
       {!collapsed && !mobile && (
         <div className="sidebar-stats">
           <div className="stat-item">
@@ -181,7 +269,9 @@ const Sidebar = ({ mobile = false, onClose, collapsed = false, onToggle }) => {
               <Target size={16} />
             </div>
             <div className="stat-content">
-              <span className="stat-value">87%</span>
+              <span className="stat-value">
+                {sidebarStats.loading ? '...' : `${sidebarStats.objectiveRate}%`}
+              </span>
               <span className="stat-label">Objectif atteint</span>
             </div>
           </div>
@@ -190,7 +280,9 @@ const Sidebar = ({ mobile = false, onClose, collapsed = false, onToggle }) => {
               <BarChart3 size={16} />
             </div>
             <div className="stat-content">
-              <span className="stat-value">2.4M</span>
+              <span className="stat-value">
+                {sidebarStats.loading ? '...' : formatShortAmount(sidebarStats.totalCollected)}
+              </span>
               <span className="stat-label">FCFA collectés</span>
             </div>
           </div>

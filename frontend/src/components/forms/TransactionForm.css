@@ -30,6 +30,8 @@
   overflow: hidden;
   animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
+  display: flex;
+  flex-direction: column; 
 }
 
 @keyframes slideUp {
@@ -53,6 +55,7 @@
   color: white;
   position: relative;
   overflow: hidden;
+  flex-shrink: 0; /* Ne pas rétrécir */
 }
 
 .modal-header.modern::before {
@@ -129,6 +132,7 @@
   padding: 1.5rem 2rem;
   background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
   border-bottom: 1px solid rgba(226, 232, 240, 0.5);
+  flex-shrink: 0; /* Ne pas rétrécir */
 }
 
 .progress-steps {
@@ -206,13 +210,36 @@
   align-items: center;
   justify-content: center;
   padding: 4rem 2rem;
+  flex: 1;
+  overflow-y: auto;
 }
 
-/* Form */
+/* Form  */
 .transaction-form.modern {
   padding: 2rem;
   overflow-y: auto;
-  max-height: calc(90vh - 200px);
+  flex: 1; /* Prend tout l'espace disponible */
+  min-height: 0; /* Permet au flex de fonctionner */
+}
+
+/* Custom Scrollbar */
+.transaction-form.modern::-webkit-scrollbar {
+  width: 8px;
+}
+
+.transaction-form.modern::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, 0.3);
+  border-radius: 4px;
+}
+
+.transaction-form.modern::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.3);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.transaction-form.modern::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.5);
 }
 
 .form-step {
@@ -432,6 +459,28 @@
   display: flex;
   flex-direction: column;
   gap: 2rem;
+  overflow-y: auto;
+  flex: 1; /* Prend l'espace disponible */
+  min-height: 0; /* Permet au flex de fonctionner */
+}
+
+/* Custom Scrollbar pour preview */
+.preview-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.preview-container::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, 0.3);
+  border-radius: 4px;
+}
+
+.preview-container::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.3);
+  border-radius: 4px;
+}
+
+.preview-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.5);
 }
 
 .preview-card {
@@ -521,6 +570,8 @@
   display: flex;
   gap: 1rem;
   justify-content: flex-end;
+  padding-top: 1rem;
+  flex-shrink: 0; /* Ne pas rétrécir */
 }
 
 /* Footer */
@@ -531,6 +582,7 @@
   padding: 1.5rem 2rem;
   background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
   border-top: 1px solid rgba(226, 232, 240, 0.5);
+  flex-shrink: 0; /* Ne pas rétrécir */
 }
 
 .btn-secondary {
@@ -632,7 +684,8 @@
     font-size: 1.25rem;
   }
   
-  .transaction-form.modern {
+  .transaction-form.modern,
+  .preview-container {
     padding: 1.5rem;
   }
   
@@ -647,10 +700,6 @@
   
   .type-option {
     padding: 1rem;
-  }
-  
-  .preview-container {
-    padding: 1.5rem;
   }
   
   .preview-card {
@@ -669,6 +718,13 @@
   
   .preview-actions {
     flex-direction: column;
+    width: 100%;
+  }
+  
+  .preview-actions .btn-secondary,
+  .preview-actions .btn-primary {
+    width: 100%;
+    justify-content: center;
   }
   
   .modal-footer.modern {
@@ -697,7 +753,8 @@
     font-size: 1.125rem;
   }
   
-  .transaction-form.modern {
+  .transaction-form.modern,
+  .preview-container {
     padding: 1rem;
   }
   
@@ -720,10 +777,6 @@
   .amount-input {
     padding: 0.75rem;
     font-size: 16px; /* Évite le zoom sur iOS */
-  }
-  
-  .preview-container {
-    padding: 1rem;
   }
   
   .preview-card {

@@ -9,8 +9,12 @@
 
 
 const { executeQuery } = require('../config/database');
-const { sanitizeInput, isValidEmail, isValidPhone, sendResponse } = require('../utils/helpers');
+const { sanitizeInput, isValidEmail, isValidPhone, sendResponse, generateReference } = require('../utils/helpers');
 
+// Constantes pour les frais d'adhésion et cotisations
+const ADHESION_FEE = 1000; // Frais d'adhésion fixes en FCFA
+const ADHESION_CATEGORY_ID = 1; // ID de la catégorie "Adhésions" dans la base
+const DEFAULT_ADHERENT_CONTRIBUTION = 500; // Cotisation mensuelle adhérent en FCFA
 
 // TEAM MEMBERS (Membres du Bureau)
 
@@ -201,13 +205,24 @@ const getAdherents = async (req, res) => {
   }
 };
 
-// Créer un adhérent
+// Créer un adhérent avec création automatique de la transaction des frais d'adhésion
 const createAdherent = async (req, res) => {
   try {
-    const { name, email, phone, registration_date, notes } = req.body;
+    const { name, email, phone, registration_date, notes, payment_mode } = req.body;
 
+    // Validations de base
     if (!name || !registration_date) {
       return sendResponse(res, 400, 'Nom et date d\'inscription requis');
+    }
+
+    if (!payment_mode) {
+      return sendResponse(res, 400, 'Mode de paiement requis pour les frais d\'adhésion');
+    }
+
+    // Vérifier que le mode de paiement est valide
+    const validPaymentModes = ['cash', 'om', 'momo', 'virement', 'cheque'];
+    if (!validPaymentModes.includes(payment_mode)) {
+      return sendResponse(res, 400, 'Mode de paiement invalide');
     }
 
     const cleanName = sanitizeInput(name);
@@ -236,18 +251,106 @@ const createAdherent = async (req, res) => {
       }
     }
 
+    // 1. Créer l'adhérent
     const result = await executeQuery(`
       INSERT INTO adherents (name, email, phone, registration_date, notes)
       VALUES (?, ?, ?, ?, ?)
     `, [cleanName, cleanEmail, cleanPhone, registration_date, cleanNotes]);
 
+    const adherentId = result.insertId;
+
+    // 2. Créer automatiquement la transaction des frais d'adhésion
+    try {
+      // Générer une référence unique pour la transaction
+      const transactionYear = new Date(registration_date).getFullYear();
+      const baseReference = generateReference('ADH', transactionYear);
+      
+      // Vérifier l'unicité de la référence
+      let uniqueReference = baseReference;
+      let counter = 1;
+      while (true) {
+        const existing = await executeQuery(
+          'SELECT id FROM transactions WHERE reference = ?',
+          [uniqueReference]
+        );
+        if (existing.length === 0) break;
+        uniqueReference = `${baseReference}-${counter}`;
+        counter++;
+      }
+
+      // Description de la transaction
+      const transactionDescription = `Frais d'adhésion - ${cleanName}`;
+
+      // Insérer la transaction
+      await executeQuery(`
+        INSERT INTO transactions (
+          reference, category_id, amount, type, description,
+          transaction_date, payment_mode, status, contact_person,
+          created_by, validated_by, validated_at, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+      `, [
+        uniqueReference,
+        ADHESION_CATEGORY_ID,
+        ADHESION_FEE,
+        'recette',
+        transactionDescription,
+        registration_date,
+        payment_mode,
+        'validee', // Transaction validée automatiquement car paiement obligatoire
+        cleanName,
+        req.user.id,
+        req.user.id,
+        'Frais d\'adhésion payés lors de l\'inscription'
+      ]);
+
+      console.log(`✅ Transaction d'adhésion créée: ${uniqueReference} - ${cleanName} - ${ADHESION_FEE} FCFA`);
+
+    } catch (transactionError) {
+      console.error('❌ Erreur lors de la création de la transaction d\'adhésion:', transactionError.message);
+      // On continue même si la transaction échoue, mais on log l'erreur
+      // L'adhérent est déjà créé à ce stade
+    }
+
+    // 3. Créer automatiquement la cotisation du mois en cours
+    try {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1;
+      const monthYear = `${currentYear}-${String(currentMonth).padStart(2, '0')}-01`;
+
+      // Vérifier si une cotisation existe déjà pour ce mois (au cas où)
+      const existingContribution = await executeQuery(
+        'SELECT id FROM adherent_contributions WHERE adherent_id = ? AND month_year = ?',
+        [adherentId, monthYear]
+      );
+
+      if (existingContribution.length === 0) {
+        // Créer la cotisation du mois en cours
+        await executeQuery(`
+          INSERT INTO adherent_contributions (
+            adherent_id, month_year, amount, amount_paid, penalty_amount, status
+          ) VALUES (?, ?, ?, 0, 0, 'en_attente')
+        `, [adherentId, monthYear, DEFAULT_ADHERENT_CONTRIBUTION]);
+
+        console.log(`✅ Cotisation ${monthYear} créée pour l'adhérent ${cleanName} - ${DEFAULT_ADHERENT_CONTRIBUTION} FCFA`);
+      }
+
+    } catch (contributionError) {
+      console.error('❌ Erreur lors de la création de la cotisation mensuelle:', contributionError.message);
+      // On continue même si la cotisation échoue
+    }
+
+    // 4. Récupérer l'adhérent créé
     const newAdherent = await executeQuery(
       'SELECT * FROM adherents WHERE id = ?',
-      [result.insertId]
+      [adherentId]
     );
 
-    return sendResponse(res, 201, 'Adhérent créé avec succès', {
-      adherent: newAdherent[0]
+    return sendResponse(res, 201, 'Adhérent créé avec succès - Frais d\'adhésion et cotisation enregistrés', {
+      adherent: newAdherent[0],
+      adhesion_fee: ADHESION_FEE,
+      monthly_contribution: DEFAULT_ADHERENT_CONTRIBUTION,
+      payment_mode: payment_mode
     });
 
   } catch (error) {

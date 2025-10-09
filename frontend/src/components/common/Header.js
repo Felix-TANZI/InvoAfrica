@@ -42,7 +42,7 @@ const Header = ({ onMobileMenuToggle, onSidebarToggle, sidebarCollapsed }) => {
     {
       id: 1,
       title: "Nouvelle cotisation",
-      message: "Jean Dupont a payé sa cotisation",
+      message: "Felix NZIKO a payé sa cotisation",
       time: "Il y a 5 min",
       type: "success",
       unread: true

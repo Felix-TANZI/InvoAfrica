@@ -222,6 +222,41 @@
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
 }
 
+/* Style pour le select du mode de paiement */
+.form-input select,
+select.form-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 40px;
+  cursor: pointer;
+}
+
+/* Highlight pour le champ mode de paiement */
+.form-group:has(#payment_mode) {
+  border-left: 3px solid #10b981;
+  padding-left: 12px;
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.03) 0%, transparent 100%);
+  border-radius: 4px;
+  margin-left: -12px;
+  padding: 12px;
+}
+
+/* Animation pour le champ payment_mode */
+@keyframes pulseGreen {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1);
+  }
+}
+
+#payment_mode:focus {
+  animation: pulseGreen 2s infinite;
+}
+
 .textarea-container {
   position: relative;
 }
@@ -320,14 +355,17 @@
 
 /* Field hints */
 .field-hint {
-  font-size: 0.75rem;
-  color: #10b981;
-  margin-top: 0.25rem;
-  font-weight: 500;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .field-hint.penalty {
   color: #f59e0b;
+  font-weight: 500;
 }
 
 /* Preview Mode */
@@ -468,6 +506,21 @@
   grid-column: 2;
 }
 
+/* Notice de paiement dans le preview */
+.payment-notice {
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border-radius: 8px;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
+}
+
 /* Boutons spécifiques */
 .btn-primary.adherent {
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
@@ -541,6 +594,11 @@
     gap: 1rem;
   }
   
+  .form-group:has(#payment_mode) {
+    margin-left: 0;
+    padding: 8px;
+  }
+  
   .preview-container.adherent {
     padding: 1.5rem;
   }
@@ -562,6 +620,11 @@
   
   .preview-grid {
     grid-template-columns: 1fr;
+  }
+  
+  .payment-notice {
+    font-size: 12px;
+    padding: 10px 12px;
   }
   
   .modal-footer.adherent-modern {

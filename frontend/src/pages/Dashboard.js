@@ -1,4 +1,4 @@
-/*   Projet : InvoAfrica - Dashboard corrigé
+/*   Projet : InvoAfrica
      @Auteur : NZIKO Felix Andre */
 
 import React, { useEffect, useState } from 'react';

@@ -197,7 +197,7 @@ const Login = () => {
 
       <div className="login-footer">
         <div className="version-info">
-          InvoAfrica v1.0 • Club GI • 2024
+          InvoAfrica v1.0 • Club GI • 2025
         </div>
       </div>
     </div>

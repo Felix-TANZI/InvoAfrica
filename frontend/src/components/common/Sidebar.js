@@ -1,13 +1,4 @@
-/*   Projet : InvoAfrica
-     @Auteur : NZIKO Felix Andre
-     Email : tanzifelix@gmail.com
-     version : beta 1.0
-
-     Instagram : felix_tanzi
-     GitHub : Felix-TANZI
-     Linkedin : Felix TANZI */
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -20,10 +11,8 @@ import {
   TrendingUp,
   Sparkles,
   ChevronRight,
-  Home,
   BarChart3,
   Target,
-  Shield,
   HelpCircle
 } from 'lucide-react';
 import { usePermissions } from '../../hooks/useAuth';
@@ -34,21 +23,36 @@ const Sidebar = ({ mobile = false, onClose, collapsed = false, onToggle }) => {
   const { hasRole } = usePermissions();
   const location = useLocation();
   const [hoveredItem, setHoveredItem] = useState(null);
+  const isMountedRef = useRef(true);
   const [sidebarStats, setSidebarStats] = useState({
     objectiveRate: 0,
     totalCollected: 0,
     loading: true
   });
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Récupérer les stats pour la sidebar
   useEffect(() => {
+    let isSubscribed = true;
+
     const fetchSidebarStats = async () => {
       try {
         console.log('🔄 Chargement stats sidebar...');
+        
+        if (!isSubscribed) return;
+        
         setSidebarStats(prev => ({ ...prev, loading: true }));
         
         const response = await dashboardAPI.getStats();
         console.log('📊 Réponse API sidebar:', response);
+        
+        if (!isSubscribed) return;
         
         if (response.status === 'success') {
           const data = response.data;
@@ -78,6 +82,8 @@ const Sidebar = ({ mobile = false, onClose, collapsed = false, onToggle }) => {
             objectiveRate
           });
           
+          if (!isSubscribed) return;
+          
           setSidebarStats({
             objectiveRate: objectiveRate || 0,
             totalCollected: totalCollected || 0,
@@ -86,11 +92,13 @@ const Sidebar = ({ mobile = false, onClose, collapsed = false, onToggle }) => {
         }
       } catch (error) {
         console.error('❌ Erreur lors de la récupération des stats sidebar:', error);
-        setSidebarStats({
-          objectiveRate: 0,
-          totalCollected: 0,
-          loading: false
-        });
+        if (isSubscribed) {
+          setSidebarStats({
+            objectiveRate: 0,
+            totalCollected: 0,
+            loading: false
+          });
+        }
       }
     };
 
@@ -99,11 +107,25 @@ const Sidebar = ({ mobile = false, onClose, collapsed = false, onToggle }) => {
       fetchSidebarStats();
       
       // Rafraîchir toutes les 30 secondes
-      const interval = setInterval(fetchSidebarStats, 30000);
-      return () => clearInterval(interval);
+      const interval = setInterval(() => {
+        if (isSubscribed) {
+          fetchSidebarStats();
+        }
+      }, 30000);
+      
+      return () => {
+        isSubscribed = false;
+        clearInterval(interval);
+      };
     } else {
-      setSidebarStats(prev => ({ ...prev, loading: false }));
+      if (isSubscribed) {
+        setSidebarStats(prev => ({ ...prev, loading: false }));
+      }
     }
+
+    return () => {
+      isSubscribed = false;
+    };
   }, [collapsed]);
 
   const formatShortAmount = (amount) => {

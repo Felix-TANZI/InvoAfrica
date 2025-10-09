@@ -26,7 +26,8 @@ import {
   MessageSquare,
   Shield,
   Award,
-  MapPin
+  MapPin,
+  CreditCard
 } from 'lucide-react';
 import { memberAPI } from '../../services/api';
 import LoadingSpinner from '../common/LoadingSpinner';
@@ -46,7 +47,8 @@ const AdherentForm = ({ isOpen, onClose, onSuccess, adherent = null }) => {
     profession: '',
     birth_date: '',
     emergency_contact: '',
-    emergency_phone: ''
+    emergency_phone: '',
+    payment_mode: 'cash'
   });
   
   const [loading, setLoading] = useState(false);
@@ -58,7 +60,6 @@ const AdherentForm = ({ isOpen, onClose, onSuccess, adherent = null }) => {
   useEffect(() => {
     if (isOpen) {
       if (adherent) {
-        // Mode édition
         setFormData({
           name: adherent.name || '',
           email: adherent.email || '',
@@ -71,10 +72,10 @@ const AdherentForm = ({ isOpen, onClose, onSuccess, adherent = null }) => {
           profession: adherent.profession || '',
           birth_date: adherent.birth_date || '',
           emergency_contact: adherent.emergency_contact || '',
-          emergency_phone: adherent.emergency_phone || ''
+          emergency_phone: adherent.emergency_phone || '',
+          payment_mode: 'cash'
         });
       } else {
-        // Mode création
         setFormData({
           name: '',
           email: '',
@@ -87,7 +88,8 @@ const AdherentForm = ({ isOpen, onClose, onSuccess, adherent = null }) => {
           profession: '',
           birth_date: '',
           emergency_contact: '',
-          emergency_phone: ''
+          emergency_phone: '',
+          payment_mode: 'cash'
         });
       }
       
@@ -142,6 +144,12 @@ const AdherentForm = ({ isOpen, onClose, onSuccess, adherent = null }) => {
           if (age > 100) return 'Veuillez vérifier la date de naissance';
         }
         return null;
+      },
+      payment_mode: (val) => {
+        if (!adherent && !val) return 'Le mode de paiement est requis';
+        const validModes = ['cash', 'om', 'momo', 'virement', 'cheque'];
+        if (val && !validModes.includes(val)) return 'Mode de paiement invalide';
+        return null;
       }
     };
 
@@ -153,8 +161,12 @@ const AdherentForm = ({ isOpen, onClose, onSuccess, adherent = null }) => {
     const newValidationStatus = {};
 
     if (currentStep === 1) {
-      // Validation étape 1 : Informations personnelles
       const fields = ['name', 'email', 'phone', 'registration_date'];
+      
+      if (!adherent) {
+        fields.push('payment_mode');
+      }
+      
       fields.forEach(field => {
         const error = validateField(field, formData[field]);
         if (error) {
@@ -167,7 +179,6 @@ const AdherentForm = ({ isOpen, onClose, onSuccess, adherent = null }) => {
     }
 
     if (currentStep === 2) {
-      // Validation étape 2 : Informations complémentaires
       const fields = ['penalty_amount', 'birth_date', 'emergency_phone'];
       fields.forEach(field => {
         const error = validateField(field, formData[field]);
@@ -191,7 +202,6 @@ const AdherentForm = ({ isOpen, onClose, onSuccess, adherent = null }) => {
     
     setFormData(prev => ({ ...prev, [name]: newValue }));
 
-    // Validation en temps réel
     const error = validateField(name, newValue);
     setErrors(prev => ({
       ...prev,
@@ -245,12 +255,16 @@ const AdherentForm = ({ isOpen, onClose, onSuccess, adherent = null }) => {
         birth_date: formData.birth_date || null
       };
 
+      if (!adherent) {
+        submitData.payment_mode = formData.payment_mode;
+      }
+
       if (adherent) {
         await memberAPI.updateAdherent(adherent.id, submitData);
         toast.success('Adhérent modifié avec succès');
       } else {
         await memberAPI.createAdherent(submitData);
-        toast.success('Adhérent créé avec succès');
+        toast.success('Adhérent créé avec succès - Frais d\'adhésion et cotisation enregistrés');
       }
       
       onSuccess();
@@ -278,7 +292,8 @@ const AdherentForm = ({ isOpen, onClose, onSuccess, adherent = null }) => {
       profession: '',
       birth_date: '',
       emergency_contact: '',
-      emergency_phone: ''
+      emergency_phone: '',
+      payment_mode: 'cash'
     });
     setErrors({});
     setStep(1);
@@ -310,12 +325,539 @@ const AdherentForm = ({ isOpen, onClose, onSuccess, adherent = null }) => {
     return age;
   };
 
+  const getPaymentModeLabel = (mode) => {
+    const modes = {
+      'cash': 'Espèces',
+      'om': 'Orange Money',
+      'momo': 'MTN Mobile Money',
+      'virement': 'Virement bancaire',
+      'cheque': 'Chèque'
+    };
+    return modes[mode] || mode;
+  };
+
   if (!isOpen) return null;
+
+  const renderPreview = () => (
+    <div className="preview-container adherent" key="preview-mode">
+      <div className="member-preview-card">
+        <div className="preview-header">
+          <div className="member-avatar">
+            <User size={32} />
+          </div>
+          <div className="member-info">
+            <h3>{formData.name}</h3>
+            <div className="member-status">
+              {formData.is_active ? (
+                <div className="status-badge active">
+                  <UserCheck size={14} />
+                  <span>Actif</span>
+                </div>
+              ) : (
+                <div className="status-badge inactive">
+                  <UserX size={14} />
+                  <span>Inactif</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="preview-sections">
+          <div className="preview-section">
+            <h4><User size={16} /> Informations Personnelles</h4>
+            <div className="preview-grid">
+              {formData.email && (
+                <div className="preview-item" key="preview-email">
+                  <Mail size={14} />
+                  <span>Email</span>
+                  <strong>{formData.email}</strong>
+                </div>
+              )}
+              {formData.phone && (
+                <div className="preview-item" key="preview-phone">
+                  <Phone size={14} />
+                  <span>Téléphone</span>
+                  <strong>{formData.phone}</strong>
+                </div>
+              )}
+              {formData.birth_date && (
+                <div className="preview-item" key="preview-birth">
+                  <Calendar size={14} />
+                  <span>Date de naissance</span>
+                  <strong>{formatDate(formData.birth_date)} ({getAge(formData.birth_date)} ans)</strong>
+                </div>
+              )}
+              <div className="preview-item" key="preview-registration">
+                <Calendar size={14} />
+                <span>Date d'inscription</span>
+                <strong>{formatDate(formData.registration_date)}</strong>
+              </div>
+            </div>
+          </div>
+
+          {!adherent && (
+            <div className="preview-section" key="preview-payment">
+              <h4><CreditCard size={16} /> Paiement des Frais d'Adhésion</h4>
+              <div className="preview-grid">
+                <div className="preview-item">
+                  <DollarSign size={14} />
+                  <span>Montant</span>
+                  <strong>1,000 FCFA</strong>
+                </div>
+                <div className="preview-item">
+                  <CreditCard size={14} />
+                  <span>Mode de paiement</span>
+                  <strong>{getPaymentModeLabel(formData.payment_mode)}</strong>
+                </div>
+              </div>
+              <div className="payment-notice">
+                ✅ Les frais d'adhésion seront automatiquement enregistrés dans les transactions
+              </div>
+            </div>
+          )}
+
+          {(formData.profession || formData.address) && (
+            <div className="preview-section" key="preview-professional">
+              <h4><Shield size={16} /> Informations Professionnelles</h4>
+              <div className="preview-grid">
+                {formData.profession && (
+                  <div className="preview-item">
+                    <Award size={14} />
+                    <span>Profession</span>
+                    <strong>{formData.profession}</strong>
+                  </div>
+                )}
+                {formData.address && (
+                  <div className="preview-item">
+                    <MapPin size={14} />
+                    <span>Adresse</span>
+                    <strong>{formData.address}</strong>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {(formData.emergency_contact || formData.emergency_phone) && (
+            <div className="preview-section" key="preview-emergency">
+              <h4><AlertCircle size={16} /> Contact d'Urgence</h4>
+              <div className="preview-grid">
+                {formData.emergency_contact && (
+                  <div className="preview-item">
+                    <User size={14} />
+                    <span>Nom</span>
+                    <strong>{formData.emergency_contact}</strong>
+                  </div>
+                )}
+                {formData.emergency_phone && (
+                  <div className="preview-item">
+                    <Phone size={14} />
+                    <span>Téléphone</span>
+                    <strong>{formData.emergency_phone}</strong>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {(formData.penalty_amount > 0 || formData.notes) && (
+            <div className="preview-section" key="preview-additional">
+              <h4><FileText size={16} /> Informations Additionnelles</h4>
+              <div className="preview-grid">
+                {formData.penalty_amount > 0 && (
+                  <div className="preview-item penalty">
+                    <DollarSign size={14} />
+                    <span>Pénalités</span>
+                    <strong>{formatAmount(formData.penalty_amount)}</strong>
+                  </div>
+                )}
+                {formData.notes && (
+                  <div className="preview-item full-width">
+                    <MessageSquare size={14} />
+                    <span>Notes</span>
+                    <strong>{formData.notes}</strong>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="preview-actions">
+        <button 
+          type="button" 
+          onClick={() => setShowPreview(false)} 
+          className="btn-secondary"
+        >
+          Modifier
+        </button>
+        <button 
+          onClick={handleSubmit} 
+          disabled={loading} 
+          className="btn-primary adherent"
+        >
+          {loading ? (
+            <LoadingSpinner size="small" />
+          ) : (
+            <>
+              <Save size={18} />
+              {adherent ? 'Modifier' : 'Créer'}
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderFormSteps = () => (
+    <form onSubmit={handleSubmit} className="adherent-form modern" key="form-steps">
+      <div 
+        className={`form-step ${step === 1 ? 'active' : 'hidden'}`}
+        key="form-step-1"
+      >
+        <div className="step-header">
+          <User size={20} />
+          <h3>Informations Personnelles</h3>
+          <p>Renseignez les informations de base de l'adhérent</p>
+        </div>
+
+        <div className="form-grid">
+          <div className="form-group full-width">
+            <label htmlFor="name">Nom complet *</label>
+            <div className="input-container">
+              <input
+                type="text"
+                id="name"
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+                className={`form-input ${validationStatus.name === 'error' ? 'error' : ''} ${validationStatus.name === 'success' ? 'success' : ''}`}
+                placeholder="Entrez le nom complet"
+              />
+              <User size={16} className="input-icon" />
+              {validationStatus.name === 'success' && (
+                <CheckCircle size={16} className="validation-icon success" />
+              )}
+              {validationStatus.name === 'error' && (
+                <AlertCircle size={16} className="validation-icon error" />
+              )}
+            </div>
+            {errors.name && <span className="error-message">{errors.name}</span>}
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="email">Email</label>
+            <div className="input-container">
+              <input
+                type="email"
+                id="email"
+                name="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                className={`form-input ${validationStatus.email === 'error' ? 'error' : ''} ${validationStatus.email === 'success' ? 'success' : ''}`}
+                placeholder="exemple@email.com"
+              />
+              <Mail size={16} className="input-icon" />
+              {validationStatus.email === 'success' && (
+                <CheckCircle size={16} className="validation-icon success" />
+              )}
+              {validationStatus.email === 'error' && (
+                <AlertCircle size={16} className="validation-icon error" />
+              )}
+            </div>
+            {errors.email && <span className="error-message">{errors.email}</span>}
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="phone">Téléphone</label>
+            <div className="input-container">
+              <input
+                type="tel"
+                id="phone"
+                name="phone"
+                value={formData.phone}
+                onChange={handleInputChange}
+                className={`form-input ${validationStatus.phone === 'error' ? 'error' : ''} ${validationStatus.phone === 'success' ? 'success' : ''}`}
+                placeholder="+237 6XX XXX XXX"
+              />
+              <Phone size={16} className="input-icon" />
+              {validationStatus.phone === 'success' && (
+                <CheckCircle size={16} className="validation-icon success" />
+              )}
+              {validationStatus.phone === 'error' && (
+                <AlertCircle size={16} className="validation-icon error" />
+              )}
+            </div>
+            {errors.phone && <span className="error-message">{errors.phone}</span>}
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="registration_date">Date d'inscription *</label>
+            <div className="input-container">
+              <input
+                type="date"
+                id="registration_date"
+                name="registration_date"
+                value={formData.registration_date}
+                onChange={handleInputChange}
+                className={`form-input ${validationStatus.registration_date === 'error' ? 'error' : ''} ${validationStatus.registration_date === 'success' ? 'success' : ''}`}
+              />
+              <Calendar size={16} className="input-icon" />
+              {validationStatus.registration_date === 'success' && (
+                <CheckCircle size={16} className="validation-icon success" />
+              )}
+              {validationStatus.registration_date === 'error' && (
+                <AlertCircle size={16} className="validation-icon error" />
+              )}
+            </div>
+            {errors.registration_date && <span className="error-message">{errors.registration_date}</span>}
+          </div>
+
+          {!adherent && (
+            <div className="form-group" key="payment-mode-field">
+              <label htmlFor="payment_mode">Mode de Paiement (Frais d'adhésion) *</label>
+              <div className="input-container">
+                <select
+                  id="payment_mode"
+                  name="payment_mode"
+                  value={formData.payment_mode}
+                  onChange={handleInputChange}
+                  className={`form-input ${validationStatus.payment_mode === 'error' ? 'error' : ''} ${validationStatus.payment_mode === 'success' ? 'success' : ''}`}
+                >
+                  <option value="cash">Espèces</option>
+                  <option value="om">Orange Money</option>
+                  <option value="momo">MTN Mobile Money</option>
+                  <option value="virement">Virement bancaire</option>
+                  <option value="cheque">Chèque</option>
+                </select>
+                <CreditCard size={16} className="input-icon" />
+                {validationStatus.payment_mode === 'success' && (
+                  <CheckCircle size={16} className="validation-icon success" />
+                )}
+                {validationStatus.payment_mode === 'error' && (
+                  <AlertCircle size={16} className="validation-icon error" />
+                )}
+              </div>
+              {errors.payment_mode && <span className="error-message">{errors.payment_mode}</span>}
+              <div className="field-hint">
+                💡 Frais d'adhésion: 1,000 FCFA (obligatoire pour tous les nouveaux adhérents)
+              </div>
+            </div>
+          )}
+
+          <div className="form-group">
+            <label htmlFor="birth_date">Date de naissance</label>
+            <div className="input-container">
+              <input
+                type="date"
+                id="birth_date"
+                name="birth_date"
+                value={formData.birth_date}
+                onChange={handleInputChange}
+                className={`form-input ${validationStatus.birth_date === 'error' ? 'error' : ''} ${validationStatus.birth_date === 'success' ? 'success' : ''}`}
+              />
+              <Calendar size={16} className="input-icon" />
+              {validationStatus.birth_date === 'success' && (
+                <CheckCircle size={16} className="validation-icon success" />
+              )}
+              {validationStatus.birth_date === 'error' && (
+                <AlertCircle size={16} className="validation-icon error" />
+              )}
+            </div>
+            {errors.birth_date && <span className="error-message">{errors.birth_date}</span>}
+            {formData.birth_date && !errors.birth_date && (
+              <div className="field-hint">Âge: {getAge(formData.birth_date)} ans</div>
+            )}
+          </div>
+
+          <div className="form-group status-group">
+            <label className="status-toggle">
+              <input
+                type="checkbox"
+                name="is_active"
+                checked={formData.is_active}
+                onChange={handleInputChange}
+              />
+              <span className="toggle-slider"></span>
+              <div className="toggle-content">
+                <span className="toggle-label">Adhérent actif</span>
+                <span className="toggle-description">
+                  {formData.is_active ? 'Membre actif du club' : 'Membre inactif'}
+                </span>
+              </div>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div 
+        className={`form-step ${step === 2 ? 'active' : 'hidden'}`}
+        key="form-step-2"
+      >
+        <div className="step-header">
+          <Shield size={20} />
+          <h3>Informations Complémentaires</h3>
+          <p>Ajoutez des détails supplémentaires (optionnels)</p>
+        </div>
+
+        <div className="form-grid">
+          <div className="form-group">
+            <label htmlFor="profession">Profession</label>
+            <div className="input-container">
+              <input
+                type="text"
+                id="profession"
+                name="profession"
+                value={formData.profession}
+                onChange={handleInputChange}
+                className="form-input"
+                placeholder="Métier/Profession"
+              />
+              <Award size={16} className="input-icon" />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="penalty_amount">Pénalités (FCFA)</label>
+            <div className="input-container">
+              <input
+                type="number"
+                id="penalty_amount"
+                name="penalty_amount"
+                value={formData.penalty_amount}
+                onChange={handleInputChange}
+                className={`form-input ${validationStatus.penalty_amount === 'error' ? 'error' : ''}`}
+                min="0"
+                step="1"
+                placeholder="0"
+              />
+              <DollarSign size={16} className="input-icon" />
+              {validationStatus.penalty_amount === 'error' && (
+                <AlertCircle size={16} className="validation-icon error" />
+              )}
+            </div>
+            {errors.penalty_amount && <span className="error-message">{errors.penalty_amount}</span>}
+            {formData.penalty_amount > 0 && (
+              <div className="field-hint penalty">
+                Montant: {formatAmount(formData.penalty_amount)}
+              </div>
+            )}
+          </div>
+
+          <div className="form-group full-width">
+            <label htmlFor="address">Adresse</label>
+            <div className="input-container">
+              <input
+                type="text"
+                id="address"
+                name="address"
+                value={formData.address}
+                onChange={handleInputChange}
+                className="form-input"
+                placeholder="Adresse complète"
+              />
+              <MapPin size={16} className="input-icon" />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="emergency_contact">Contact d'urgence</label>
+            <div className="input-container">
+              <input
+                type="text"
+                id="emergency_contact"
+                name="emergency_contact"
+                value={formData.emergency_contact}
+                onChange={handleInputChange}
+                className="form-input"
+                placeholder="Nom du contact d'urgence"
+              />
+              <User size={16} className="input-icon" />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="emergency_phone">Téléphone d'urgence</label>
+            <div className="input-container">
+              <input
+                type="tel"
+                id="emergency_phone"
+                name="emergency_phone"
+                value={formData.emergency_phone}
+                onChange={handleInputChange}
+                className={`form-input ${validationStatus.emergency_phone === 'error' ? 'error' : ''} ${validationStatus.emergency_phone === 'success' ? 'success' : ''}`}
+                placeholder="+237 6XX XXX XXX"
+              />
+              <Phone size={16} className="input-icon" />
+              {validationStatus.emergency_phone === 'success' && (
+                <CheckCircle size={16} className="validation-icon success" />
+              )}
+              {validationStatus.emergency_phone === 'error' && (
+                <AlertCircle size={16} className="validation-icon error" />
+              )}
+            </div>
+            {errors.emergency_phone && <span className="error-message">{errors.emergency_phone}</span>}
+          </div>
+
+          <div className="form-group full-width">
+            <label htmlFor="notes">Notes</label>
+            <div className="textarea-container">
+              <textarea
+                id="notes"
+                name="notes"
+                value={formData.notes}
+                onChange={handleInputChange}
+                className="form-textarea"
+                rows="3"
+                placeholder="Notes additionnelles sur l'adhérent..."
+              />
+              <MessageSquare size={16} className="textarea-icon" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="modal-footer adherent-modern">
+        {step === 1 ? (
+          <>
+            <button type="button" onClick={handleClose} className="btn-secondary">
+              Annuler
+            </button>
+            <button type="button" onClick={handleNextStep} className="btn-primary adherent">
+              Suivant
+              <Sparkles size={16} />
+            </button>
+          </>
+        ) : (
+          <>
+            <button type="button" onClick={handlePrevStep} className="btn-secondary">
+              Précédent
+            </button>
+            <button type="button" onClick={handlePreview} className="btn-secondary">
+              <CheckCircle size={16} />
+              Aperçu
+            </button>
+            <button type="submit" disabled={loading} className="btn-primary adherent">
+              {loading ? (
+                <LoadingSpinner size="small" />
+              ) : (
+                <>
+                  <Save size={16} />
+                  {adherent ? 'Modifier' : 'Créer'}
+                </>
+              )}
+            </button>
+          </>
+        )}
+      </div>
+    </form>
+  );
 
   return (
     <div className="modal-overlay adherent-modern" onClick={handleClose}>
       <div className="modal-content adherent-modern" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
         <div className="modal-header adherent-modern">
           <div className="modal-title">
             <div className="title-icon adherent">
@@ -334,9 +876,8 @@ const AdherentForm = ({ isOpen, onClose, onSuccess, adherent = null }) => {
           </button>
         </div>
 
-        {/* Progress Bar */}
         {!showPreview && (
-          <div className="progress-container adherent">
+          <div className="progress-container adherent" key="progress-bar">
             <div className="progress-steps">
               <div className={`progress-step ${step >= 1 ? 'active' : ''} ${step > 1 ? 'completed' : ''}`}>
                 <div className="step-number">
@@ -355,480 +896,7 @@ const AdherentForm = ({ isOpen, onClose, onSuccess, adherent = null }) => {
           </div>
         )}
 
-        {showPreview ? (
-          /* Preview Mode */
-          <div className="preview-container adherent">
-            <div className="member-preview-card">
-              <div className="preview-header">
-                <div className="member-avatar">
-                  <User size={32} />
-                </div>
-                <div className="member-info">
-                  <h3>{formData.name}</h3>
-                  <div className="member-status">
-                    {formData.is_active ? (
-                      <div className="status-badge active">
-                        <UserCheck size={14} />
-                        <span>Actif</span>
-                      </div>
-                    ) : (
-                      <div className="status-badge inactive">
-                        <UserX size={14} />
-                        <span>Inactif</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="preview-sections">
-                <div className="preview-section">
-                  <h4><User size={16} /> Informations Personnelles</h4>
-                  <div className="preview-grid">
-                    {formData.email && (
-                      <div className="preview-item">
-                        <Mail size={14} />
-                        <span>Email</span>
-                        <strong>{formData.email}</strong>
-                      </div>
-                    )}
-                    {formData.phone && (
-                      <div className="preview-item">
-                        <Phone size={14} />
-                        <span>Téléphone</span>
-                        <strong>{formData.phone}</strong>
-                      </div>
-                    )}
-                    {formData.birth_date && (
-                      <div className="preview-item">
-                        <Calendar size={14} />
-                        <span>Date de naissance</span>
-                        <strong>{formatDate(formData.birth_date)} ({getAge(formData.birth_date)} ans)</strong>
-                      </div>
-                    )}
-                    <div className="preview-item">
-                      <Calendar size={14} />
-                      <span>Date d'inscription</span>
-                      <strong>{formatDate(formData.registration_date)}</strong>
-                    </div>
-                  </div>
-                </div>
-
-                {(formData.profession || formData.address) && (
-                  <div className="preview-section">
-                    <h4><Shield size={16} /> Informations Professionnelles</h4>
-                    <div className="preview-grid">
-                      {formData.profession && (
-                        <div className="preview-item">
-                          <Award size={14} />
-                          <span>Profession</span>
-                          <strong>{formData.profession}</strong>
-                        </div>
-                      )}
-                      {formData.address && (
-                        <div className="preview-item">
-                          <MapPin size={14} />
-                          <span>Adresse</span>
-                          <strong>{formData.address}</strong>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {(formData.emergency_contact || formData.emergency_phone) && (
-                  <div className="preview-section">
-                    <h4><AlertCircle size={16} /> Contact d'Urgence</h4>
-                    <div className="preview-grid">
-                      {formData.emergency_contact && (
-                        <div className="preview-item">
-                          <User size={14} />
-                          <span>Nom</span>
-                          <strong>{formData.emergency_contact}</strong>
-                        </div>
-                      )}
-                      {formData.emergency_phone && (
-                        <div className="preview-item">
-                          <Phone size={14} />
-                          <span>Téléphone</span>
-                          <strong>{formData.emergency_phone}</strong>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {(formData.penalty_amount > 0 || formData.notes) && (
-                  <div className="preview-section">
-                    <h4><FileText size={16} /> Informations Additionnelles</h4>
-                    <div className="preview-grid">
-                      {formData.penalty_amount > 0 && (
-                        <div className="preview-item penalty">
-                          <DollarSign size={14} />
-                          <span>Pénalités</span>
-                          <strong>{formatAmount(formData.penalty_amount)}</strong>
-                        </div>
-                      )}
-                      {formData.notes && (
-                        <div className="preview-item full-width">
-                          <MessageSquare size={14} />
-                          <span>Notes</span>
-                          <strong>{formData.notes}</strong>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="preview-actions">
-              <button 
-                type="button" 
-                onClick={() => setShowPreview(false)} 
-                className="btn-secondary"
-              >
-                Modifier
-              </button>
-              <button 
-                onClick={handleSubmit} 
-                disabled={loading} 
-                className="btn-primary adherent"
-              >
-                {loading ? (
-                  <LoadingSpinner size="small" />
-                ) : (
-                  <>
-                    <Save size={18} />
-                    {adherent ? 'Modifier' : 'Créer'}
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        ) : (
-          /* Form Steps */
-          <form onSubmit={handleSubmit} className="adherent-form modern">
-            {step === 1 && (
-              <div className="form-step active">
-                <div className="step-header">
-                  <User size={20} />
-                  <h3>Informations Personnelles</h3>
-                  <p>Renseignez les informations de base de l'adhérent</p>
-                </div>
-
-                <div className="form-grid">
-                  {/* Nom complet */}
-                  <div className="form-group full-width">
-                    <label htmlFor="name">Nom complet *</label>
-                    <div className="input-container">
-                      <input
-                        type="text"
-                        id="name"
-                        name="name"
-                        value={formData.name}
-                        onChange={handleInputChange}
-                        className={`form-input ${validationStatus.name === 'error' ? 'error' : ''} ${validationStatus.name === 'success' ? 'success' : ''}`}
-                        placeholder="Entrez le nom complet"
-                      />
-                      <User size={16} className="input-icon" />
-                      {validationStatus.name === 'success' && (
-                        <CheckCircle size={16} className="validation-icon success" />
-                      )}
-                      {validationStatus.name === 'error' && (
-                        <AlertCircle size={16} className="validation-icon error" />
-                      )}
-                    </div>
-                    {errors.name && <span className="error-message">{errors.name}</span>}
-                  </div>
-
-                  {/* Email */}
-                  <div className="form-group">
-                    <label htmlFor="email">Email</label>
-                    <div className="input-container">
-                      <input
-                        type="email"
-                        id="email"
-                        name="email"
-                        value={formData.email}
-                        onChange={handleInputChange}
-                        className={`form-input ${validationStatus.email === 'error' ? 'error' : ''} ${validationStatus.email === 'success' ? 'success' : ''}`}
-                        placeholder="exemple@email.com"
-                      />
-                      <Mail size={16} className="input-icon" />
-                      {validationStatus.email === 'success' && (
-                        <CheckCircle size={16} className="validation-icon success" />
-                      )}
-                      {validationStatus.email === 'error' && (
-                        <AlertCircle size={16} className="validation-icon error" />
-                      )}
-                    </div>
-                    {errors.email && <span className="error-message">{errors.email}</span>}
-                  </div>
-
-                  {/* Téléphone */}
-                  <div className="form-group">
-                    <label htmlFor="phone">Téléphone</label>
-                    <div className="input-container">
-                      <input
-                        type="tel"
-                        id="phone"
-                        name="phone"
-                        value={formData.phone}
-                        onChange={handleInputChange}
-                        className={`form-input ${validationStatus.phone === 'error' ? 'error' : ''} ${validationStatus.phone === 'success' ? 'success' : ''}`}
-                        placeholder="+237 6XX XXX XXX"
-                      />
-                      <Phone size={16} className="input-icon" />
-                      {validationStatus.phone === 'success' && (
-                        <CheckCircle size={16} className="validation-icon success" />
-                      )}
-                      {validationStatus.phone === 'error' && (
-                        <AlertCircle size={16} className="validation-icon error" />
-                      )}
-                    </div>
-                    {errors.phone && <span className="error-message">{errors.phone}</span>}
-                  </div>
-
-                  {/* Date d'inscription */}
-                  <div className="form-group">
-                    <label htmlFor="registration_date">Date d'inscription *</label>
-                    <div className="input-container">
-                      <input
-                        type="date"
-                        id="registration_date"
-                        name="registration_date"
-                        value={formData.registration_date}
-                        onChange={handleInputChange}
-                        className={`form-input ${validationStatus.registration_date === 'error' ? 'error' : ''} ${validationStatus.registration_date === 'success' ? 'success' : ''}`}
-                      />
-                      <Calendar size={16} className="input-icon" />
-                      {validationStatus.registration_date === 'success' && (
-                        <CheckCircle size={16} className="validation-icon success" />
-                      )}
-                      {validationStatus.registration_date === 'error' && (
-                        <AlertCircle size={16} className="validation-icon error" />
-                      )}
-                    </div>
-                    {errors.registration_date && <span className="error-message">{errors.registration_date}</span>}
-                  </div>
-
-                  {/* Date de naissance */}
-                  <div className="form-group">
-                    <label htmlFor="birth_date">Date de naissance</label>
-                    <div className="input-container">
-                      <input
-                        type="date"
-                        id="birth_date"
-                        name="birth_date"
-                        value={formData.birth_date}
-                        onChange={handleInputChange}
-                        className={`form-input ${validationStatus.birth_date === 'error' ? 'error' : ''} ${validationStatus.birth_date === 'success' ? 'success' : ''}`}
-                      />
-                      <Calendar size={16} className="input-icon" />
-                      {validationStatus.birth_date === 'success' && (
-                        <CheckCircle size={16} className="validation-icon success" />
-                      )}
-                      {validationStatus.birth_date === 'error' && (
-                        <AlertCircle size={16} className="validation-icon error" />
-                      )}
-                    </div>
-                    {errors.birth_date && <span className="error-message">{errors.birth_date}</span>}
-                    {formData.birth_date && !errors.birth_date && (
-                      <div className="field-hint">Âge: {getAge(formData.birth_date)} ans</div>
-                    )}
-                  </div>
-
-                  {/* Statut actif */}
-                  <div className="form-group status-group">
-                    <label className="status-toggle">
-                      <input
-                        type="checkbox"
-                        name="is_active"
-                        checked={formData.is_active}
-                        onChange={handleInputChange}
-                      />
-                      <span className="toggle-slider"></span>
-                      <div className="toggle-content">
-                        <span className="toggle-label">Adhérent actif</span>
-                        <span className="toggle-description">
-                          {formData.is_active ? 'Membre actif du club' : 'Membre inactif'}
-                        </span>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {step === 2 && (
-              <div className="form-step active">
-                <div className="step-header">
-                  <Shield size={20} />
-                  <h3>Informations Complémentaires</h3>
-                  <p>Ajoutez des détails supplémentaires (optionnels)</p>
-                </div>
-
-                <div className="form-grid">
-                  {/* Profession */}
-                  <div className="form-group">
-                    <label htmlFor="profession">Profession</label>
-                    <div className="input-container">
-                      <input
-                        type="text"
-                        id="profession"
-                        name="profession"
-                        value={formData.profession}
-                        onChange={handleInputChange}
-                        className="form-input"
-                        placeholder="Métier/Profession"
-                      />
-                      <Award size={16} className="input-icon" />
-                    </div>
-                  </div>
-
-                  {/* Montant des pénalités */}
-                  <div className="form-group">
-                    <label htmlFor="penalty_amount">Pénalités (FCFA)</label>
-                    <div className="input-container">
-                      <input
-                        type="number"
-                        id="penalty_amount"
-                        name="penalty_amount"
-                        value={formData.penalty_amount}
-                        onChange={handleInputChange}
-                        className={`form-input ${validationStatus.penalty_amount === 'error' ? 'error' : ''}`}
-                        min="0"
-                        step="1"
-                        placeholder="0"
-                      />
-                      <DollarSign size={16} className="input-icon" />
-                      {validationStatus.penalty_amount === 'error' && (
-                        <AlertCircle size={16} className="validation-icon error" />
-                      )}
-                    </div>
-                    {errors.penalty_amount && <span className="error-message">{errors.penalty_amount}</span>}
-                    {formData.penalty_amount > 0 && (
-                      <div className="field-hint penalty">
-                        Montant: {formatAmount(formData.penalty_amount)}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Adresse */}
-                  <div className="form-group full-width">
-                    <label htmlFor="address">Adresse</label>
-                    <div className="input-container">
-                      <input
-                        type="text"
-                        id="address"
-                        name="address"
-                        value={formData.address}
-                        onChange={handleInputChange}
-                        className="form-input"
-                        placeholder="Adresse complète"
-                      />
-                      <MapPin size={16} className="input-icon" />
-                    </div>
-                  </div>
-
-                  {/* Contact d'urgence */}
-                  <div className="form-group">
-                    <label htmlFor="emergency_contact">Contact d'urgence</label>
-                    <div className="input-container">
-                      <input
-                        type="text"
-                        id="emergency_contact"
-                        name="emergency_contact"
-                        value={formData.emergency_contact}
-                        onChange={handleInputChange}
-                        className="form-input"
-                        placeholder="Nom du contact d'urgence"
-                      />
-                      <User size={16} className="input-icon" />
-                    </div>
-                  </div>
-
-                  {/* Téléphone d'urgence */}
-                  <div className="form-group">
-                    <label htmlFor="emergency_phone">Téléphone d'urgence</label>
-                    <div className="input-container">
-                      <input
-                        type="tel"
-                        id="emergency_phone"
-                        name="emergency_phone"
-                        value={formData.emergency_phone}
-                        onChange={handleInputChange}
-                        className={`form-input ${validationStatus.emergency_phone === 'error' ? 'error' : ''} ${validationStatus.emergency_phone === 'success' ? 'success' : ''}`}
-                        placeholder="+237 6XX XXX XXX"
-                      />
-                      <Phone size={16} className="input-icon" />
-                      {validationStatus.emergency_phone === 'success' && (
-                        <CheckCircle size={16} className="validation-icon success" />
-                      )}
-                      {validationStatus.emergency_phone === 'error' && (
-                        <AlertCircle size={16} className="validation-icon error" />
-                      )}
-                    </div>
-                    {errors.emergency_phone && <span className="error-message">{errors.emergency_phone}</span>}
-                  </div>
-
-                  {/* Notes */}
-                  <div className="form-group full-width">
-                    <label htmlFor="notes">Notes</label>
-                    <div className="textarea-container">
-                      <textarea
-                        id="notes"
-                        name="notes"
-                        value={formData.notes}
-                        onChange={handleInputChange}
-                        className="form-textarea"
-                        rows="3"
-                        placeholder="Notes additionnelles sur l'adhérent..."
-                      />
-                      <MessageSquare size={16} className="textarea-icon" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="modal-footer adherent-modern">
-              {step === 1 ? (
-                <>
-                  <button type="button" onClick={handleClose} className="btn-secondary">
-                    Annuler
-                  </button>
-                  <button type="button" onClick={handleNextStep} className="btn-primary adherent">
-                    Suivant
-                    <Sparkles size={16} />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button type="button" onClick={handlePrevStep} className="btn-secondary">
-                    Précédent
-                  </button>
-                  <button type="button" onClick={handlePreview} className="btn-secondary">
-                    <CheckCircle size={16} />
-                    Aperçu
-                  </button>
-                  <button type="submit" disabled={loading} className="btn-primary adherent">
-                    {loading ? (
-                      <LoadingSpinner size="small" />
-                    ) : (
-                      <>
-                        <Save size={16} />
-                        {adherent ? 'Modifier' : 'Créer'}
-                      </>
-                    )}
-                  </button>
-                </>
-              )}
-            </div>
-          </form>
-        )}
+        {showPreview ? renderPreview() : renderFormSteps()}
       </div>
     </div>
   );

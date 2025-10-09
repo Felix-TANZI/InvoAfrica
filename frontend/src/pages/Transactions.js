@@ -1,7 +1,7 @@
 /*   Projet : InvoAfrica
      @Auteur : NZIKO Felix Andre
      Email : tanzifelix@gmail.com
-     version : beta 1.0
+     version : beta 1.0 
 
      Instagram : felix_tanzi
      GitHub : Felix-TANZI
@@ -52,16 +52,28 @@ const Transactions = () => {
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState('table'); // 'table' ou 'cards'
   
+  // État pour les statistiques globales
+  const [statistics, setStatistics] = useState({
+    total: 0,
+    recettes: 0,
+    depenses: 0,
+    en_attente: 0,
+    validee: 0,
+    montant_recettes: 0,
+    montant_depenses: 0,
+    solde: 0
+  });
+  
   // Filtres avancés
   const [filters, setFilters] = useState({
     search: '',
     status: '',
     type: '',
-    category: '',
-    dateFrom: '',
-    dateTo: '',
-    amountMin: '',
-    amountMax: ''
+    category: '', // Sera mappé à category_id
+    dateFrom: '', // Sera mappé à date_from
+    dateTo: '',   // Sera mappé à date_to
+    amountMin: '', // Sera mappé à amount_min
+    amountMax: ''  // Sera mappé à amount_max
   });
   
   // Tri
@@ -78,7 +90,6 @@ const Transactions = () => {
   // Modal de création/édition
   const [showTransactionForm, setShowTransactionForm] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
-  const [selectedTransactions, setSelectedTransactions] = useState([]);
 
   useEffect(() => {
     fetchTransactions();
@@ -88,13 +99,35 @@ const Transactions = () => {
   const fetchTransactions = async () => {
     try {
       setLoading(true);
-      const response = await transactionAPI.getAll({
+      
+      // Mapper correctement les paramètres pour le backend
+      const params = {
         page: pagination.page,
         limit: pagination.limit,
         sortBy,
         sortOrder,
-        ...filters
+        search: filters.search || undefined,
+        status: filters.status || undefined,
+        type: filters.type || undefined,
+        category_id: filters.category || undefined, 
+        date_from: filters.dateFrom || undefined,    
+        date_to: filters.dateTo || undefined,        
+        amount_min: filters.amountMin || undefined,  
+        amount_max: filters.amountMax || undefined   
+      };
+
+      // Nettoyer les undefined
+      Object.keys(params).forEach(key => {
+        if (params[key] === undefined) {
+          delete params[key];
+        }
       });
+
+      console.log('📤 Envoi des paramètres:', params);
+      
+      const response = await transactionAPI.getAll(params);
+      
+      console.log('📥 Réponse API:', response);
       
       if (response.status === 'success') {
         setTransactions(response.data.transactions);
@@ -102,8 +135,17 @@ const Transactions = () => {
           ...prev,
           total: response.data.pagination.totalItems
         }));
+        
+        // Utiliser les statistiques globales de l'API
+        if (response.data.statistics) {
+          setStatistics(response.data.statistics);
+          console.log('📊 Statistiques reçues:', response.data.statistics);
+        }
+        
+        setError(null);
       }
     } catch (err) {
+      console.error('❌ Erreur fetch transactions:', err);
       setError(err.message);
       toast.error('Erreur lors du chargement des transactions');
     } finally {
@@ -128,23 +170,28 @@ const Transactions = () => {
       toast.success('Transaction validée avec succès');
       fetchTransactions();
     } catch (err) {
-      toast.error('Erreur lors de la validation');
+      toast.error(err?.message || 'Erreur lors de la validation');
     }
   };
 
   const handleCancelTransaction = async (id) => {
+    if (!window.confirm('Êtes-vous sûr de vouloir annuler cette transaction ?')) {
+      return;
+    }
+    
     try {
       await transactionAPI.cancel(id, 'Annulée par l\'utilisateur');
       toast.success('Transaction annulée avec succès');
       fetchTransactions();
     } catch (err) {
-      toast.error('Erreur lors de l\'annulation');
+      toast.error(err?.message || 'Erreur lors de l\'annulation');
     }
   };
 
   const handleFilterChange = (key, value) => {
+    console.log(`🔄 Filtre changé: ${key} = ${value}`);
     setFilters(prev => ({ ...prev, [key]: value }));
-    setPagination(prev => ({ ...prev, page: 1 }));
+    setPagination(prev => ({ ...prev, page: 1 })); // Reset à la page 1
   };
 
   const handleSort = (field) => {
@@ -168,10 +215,11 @@ const Transactions = () => {
 
   const handleFormSuccess = () => {
     fetchTransactions();
-    toast.success('Transaction sauvegardée avec succès');
+    handleCloseForm();
   };
 
   const clearFilters = () => {
+    console.log('🧹 Effacement des filtres');
     setFilters({
       search: '',
       status: '',
@@ -182,6 +230,7 @@ const Transactions = () => {
       amountMin: '',
       amountMax: ''
     });
+    setPagination(prev => ({ ...prev, page: 1 }));
   };
 
   const getStatusInfo = (status) => {
@@ -245,14 +294,6 @@ const Transactions = () => {
   const totalPages = Math.ceil(pagination.total / pagination.limit);
   const hasFilters = Object.values(filters).some(value => value !== '');
 
-  // Statistiques rapides
-  const stats = {
-    total: transactions.length,
-    recettes: transactions.filter(t => t.type === 'recette').length,
-    depenses: transactions.filter(t => t.type === 'depense').length,
-    en_attente: transactions.filter(t => t.status === 'en_attente').length
-  };
-
   if (loading && transactions.length === 0) {
     return (
       <div className="transactions-loading modern">
@@ -269,7 +310,7 @@ const Transactions = () => {
           <div className="header-text">
             <h1 className="page-title">Transactions</h1>
             <p className="page-subtitle">
-              Gestion des recettes et dépenses • {pagination.total} transactions
+              Gestion des recettes et dépenses • {pagination.total} transaction{pagination.total > 1 ? 's' : ''}
             </p>
           </div>
           
@@ -312,14 +353,14 @@ const Transactions = () => {
         </div>
       </div>
 
-      {/* Stats rapides */}
+      {/* Stats globales provenant de l'API */}
       <div className="stats-overview">
         <div className="stat-item">
           <div className="stat-icon total">
             <FileText size={20} />
           </div>
           <div className="stat-content">
-            <span className="stat-value">{stats.total}</span>
+            <span className="stat-value">{statistics.total}</span>
             <span className="stat-label">Total</span>
           </div>
         </div>
@@ -329,7 +370,7 @@ const Transactions = () => {
             <TrendingUp size={20} />
           </div>
           <div className="stat-content">
-            <span className="stat-value">{stats.recettes}</span>
+            <span className="stat-value">{statistics.recettes}</span>
             <span className="stat-label">Recettes</span>
           </div>
         </div>
@@ -339,7 +380,7 @@ const Transactions = () => {
             <TrendingDown size={20} />
           </div>
           <div className="stat-content">
-            <span className="stat-value">{stats.depenses}</span>
+            <span className="stat-value">{statistics.depenses}</span>
             <span className="stat-label">Dépenses</span>
           </div>
         </div>
@@ -349,7 +390,7 @@ const Transactions = () => {
             <Clock size={20} />
           </div>
           <div className="stat-content">
-            <span className="stat-value">{stats.en_attente}</span>
+            <span className="stat-value">{statistics.en_attente}</span>
             <span className="stat-label">En attente</span>
           </div>
         </div>
@@ -452,6 +493,32 @@ const Transactions = () => {
               value={filters.dateTo}
               onChange={(e) => handleFilterChange('dateTo', e.target.value)}
               className="filter-input"
+            />
+          </div>
+
+          {/* Montant minimum */}
+          <div className="filter-group">
+            <label>Montant min (FCFA)</label>
+            <input
+              type="number"
+              value={filters.amountMin}
+              onChange={(e) => handleFilterChange('amountMin', e.target.value)}
+              className="filter-input"
+              placeholder="0"
+              min="0"
+            />
+          </div>
+
+          {/* Montant maximum */}
+          <div className="filter-group">
+            <label>Montant max (FCFA)</label>
+            <input
+              type="number"
+              value={filters.amountMax}
+              onChange={(e) => handleFilterChange('amountMax', e.target.value)}
+              className="filter-input"
+              placeholder="Illimité"
+              min="0"
             />
           </div>
         </div>
@@ -568,7 +635,9 @@ const Transactions = () => {
   );
 };
 
-// Composant Table
+
+// COMPOSANT TABLE
+
 const TransactionTable = ({ 
   transactions, 
   onSort, 
@@ -589,22 +658,30 @@ const TransactionTable = ({
         <thead>
           <tr>
             <th onClick={() => onSort('reference')} className="sortable">
-              <span>Référence</span>
-              <ArrowUpDown size={14} className={sortBy === 'reference' ? 'active' : ''} />
+              <span>
+                Référence
+                <ArrowUpDown size={14} className={sortBy === 'reference' ? 'active' : ''} />
+              </span>
             </th>
             <th onClick={() => onSort('transaction_date')} className="sortable">
-              <span>Date</span>
-              <ArrowUpDown size={14} className={sortBy === 'transaction_date' ? 'active' : ''} />
+              <span>
+                Date
+                <ArrowUpDown size={14} className={sortBy === 'transaction_date' ? 'active' : ''} />
+              </span>
             </th>
             <th>Description</th>
             <th>Catégorie</th>
             <th onClick={() => onSort('type')} className="sortable">
-              <span>Type</span>
-              <ArrowUpDown size={14} className={sortBy === 'type' ? 'active' : ''} />
+              <span>
+                Type
+                <ArrowUpDown size={14} className={sortBy === 'type' ? 'active' : ''} />
+              </span>
             </th>
             <th onClick={() => onSort('amount')} className="sortable">
-              <span>Montant</span>
-              <ArrowUpDown size={14} className={sortBy === 'amount' ? 'active' : ''} />
+              <span>
+                Montant
+                <ArrowUpDown size={14} className={sortBy === 'amount' ? 'active' : ''} />
+              </span>
             </th>
             <th>Statut</th>
             <th>Actions</th>
@@ -690,7 +767,9 @@ const TransactionTable = ({
   </div>
 );
 
-// Composant Cards
+
+// COMPOSANT CARDS
+
 const TransactionCards = ({ 
   transactions, 
   onEdit, 

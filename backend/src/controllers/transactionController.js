@@ -1,12 +1,11 @@
 /*   Projet : InvoAfrica
      @Auteur : NZIKO Felix Andre
      Email : tanzifelix@gmail.com
-     version : beta 1.0
+     version : beta 1.0 - CORRIGÉ
 
      Instagram : felix_tanzi
      GitHub : Felix-TANZI
      Linkedin : Felix TANZI */
-
 
 const { executeQuery, executeTransaction } = require('../config/database');
 const { 
@@ -15,7 +14,7 @@ const {
   sendResponse 
 } = require('../utils/helpers');
 
-// Récupérer toutes les transactions avec pagination et filtres
+// Récupérer toutes les transactions avec pagination, filtres ET statistiques
 const getTransactions = async (req, res) => {
   try {
     const { 
@@ -24,9 +23,11 @@ const getTransactions = async (req, res) => {
       status, 
       type, 
       category_id, 
-      date_from, 
-      date_to,
-      search 
+      date_from,   
+      date_to,     
+      search,
+      amount_min,  //  Filtre montant minimum
+      amount_max   // Filtre montant maximum
     } = req.query;
 
     const pageNum = parseInt(page);
@@ -62,6 +63,18 @@ const getTransactions = async (req, res) => {
       queryParams.push(date_to);
     }
 
+    // Filtre par montant minimum
+    if (amount_min && !isNaN(amount_min) && amount_min !== '') {
+      whereConditions.push('t.amount >= ?');
+      queryParams.push(parseFloat(amount_min));
+    }
+
+    // Filtre par montant maximum
+    if (amount_max && !isNaN(amount_max) && amount_max !== '') {
+      whereConditions.push('t.amount <= ?');
+      queryParams.push(parseFloat(amount_max));
+    }
+
     if (search && search.trim() !== '') {
       whereConditions.push('(t.description LIKE ? OR t.contact_person LIKE ? OR t.reference LIKE ?)');
       const searchTerm = `%${search.trim()}%`;
@@ -70,7 +83,21 @@ const getTransactions = async (req, res) => {
 
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
-    // Requête principale avec jointures - LIMIT et OFFSET directement dans la chaîne
+    // Calculer les statistiques GLOBALES (pas seulement la page courante)
+    const statsQuery = `
+      SELECT 
+        COUNT(*) as total_transactions,
+        SUM(CASE WHEN t.type = 'recette' THEN 1 ELSE 0 END) as total_recettes,
+        SUM(CASE WHEN t.type = 'depense' THEN 1 ELSE 0 END) as total_depenses,
+        SUM(CASE WHEN t.status = 'en_attente' THEN 1 ELSE 0 END) as total_en_attente,
+        SUM(CASE WHEN t.status = 'validee' THEN 1 ELSE 0 END) as total_validee,
+        SUM(CASE WHEN t.type = 'recette' AND t.status = 'validee' THEN t.amount ELSE 0 END) as montant_recettes,
+        SUM(CASE WHEN t.type = 'depense' AND t.status = 'validee' THEN t.amount ELSE 0 END) as montant_depenses
+      FROM transactions t
+      ${whereClause}
+    `;
+
+    // Requête principale avec jointures
     const transactionsQuery = `
       SELECT 
         t.id,
@@ -95,7 +122,7 @@ const getTransactions = async (req, res) => {
       LEFT JOIN users creator ON t.created_by = creator.id
       LEFT JOIN users validator ON t.validated_by = validator.id
       ${whereClause}
-      ORDER BY t.created_at DESC
+      ORDER BY t.transaction_date DESC, t.created_at DESC
       LIMIT ${limitNum} OFFSET ${offset}
     `;
 
@@ -107,18 +134,29 @@ const getTransactions = async (req, res) => {
     `;
 
     console.log('🔍 Query transactions:', transactionsQuery);
-    console.log('📊 Params transactions:', queryParams);
-    console.log('🔍 Query count:', countQuery);
-    console.log('📊 Params count:', queryParams);
+    console.log('📊 Query stats:', statsQuery);
+    console.log('📊 Params:', queryParams);
 
-    // Exécution des requêtes - même paramètres pour les deux requêtes
-    const [transactions, countResult] = await Promise.all([
+    // Exécuter les 3 requêtes en parallèle
+    const [transactions, countResult, statsResult] = await Promise.all([
       executeQuery(transactionsQuery, queryParams),
-      executeQuery(countQuery, queryParams)
+      executeQuery(countQuery, queryParams),
+      executeQuery(statsQuery, queryParams)
     ]);
 
     const total = countResult[0]?.total || 0;
     const totalPages = Math.ceil(total / limitNum);
+
+    // Extraire les statistiques
+    const stats = statsResult[0] || {
+      total_transactions: 0,
+      total_recettes: 0,
+      total_depenses: 0,
+      total_en_attente: 0,
+      total_validee: 0,
+      montant_recettes: 0,
+      montant_depenses: 0
+    };
 
     return sendResponse(res, 200, 'Transactions récupérées avec succès', {
       transactions,
@@ -129,6 +167,17 @@ const getTransactions = async (req, res) => {
         itemsPerPage: limitNum,
         hasNext: pageNum < totalPages,
         hasPrev: pageNum > 1
+      },
+      // Retourner les statistiques globales
+      statistics: {
+        total: parseInt(stats.total_transactions),
+        recettes: parseInt(stats.total_recettes),
+        depenses: parseInt(stats.total_depenses),
+        en_attente: parseInt(stats.total_en_attente),
+        validee: parseInt(stats.total_validee),
+        montant_recettes: parseFloat(stats.montant_recettes) || 0,
+        montant_depenses: parseFloat(stats.montant_depenses) || 0,
+        solde: (parseFloat(stats.montant_recettes) || 0) - (parseFloat(stats.montant_depenses) || 0)
       }
     });
 

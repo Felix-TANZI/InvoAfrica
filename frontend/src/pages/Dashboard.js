@@ -1,5 +1,11 @@
 /*   Projet : InvoAfrica
-     @Auteur : NZIKO Felix Andre */
+     @Auteur : NZIKO Felix Andre
+     Email : tanzifelix@gmail.com
+     version : beta 1.0 - AVEC PDF INTÉGRÉ
+
+     Instagram : felix_tanzi
+     GitHub : Felix-TANZI
+     Linkedin : Felix TANZI */
 
 import React, { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
@@ -18,7 +24,11 @@ import {
   Sparkles,
   Target,
   Clock,
-  CheckCircle2
+  CheckCircle2,
+  FileText,
+  Calendar,
+  Download,
+  ChevronRight
 } from 'lucide-react';
 import {
   LineChart,
@@ -38,8 +48,10 @@ import {
   ResponsiveContainer
 } from 'recharts';
 import { dashboardAPI } from '../services/api';
+import { pdfAPI } from '../services/api';
 import { selectCurrentUser } from '../store/slices/authSlice';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import toast from 'react-hot-toast';
 import './Dashboard.css';
 
 const Dashboard = () => {
@@ -52,6 +64,9 @@ const Dashboard = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // État pour les rapports PDF
+  const [loadingReport, setLoadingReport] = useState(null);
 
   useEffect(() => {
     fetchDashboardData();
@@ -64,7 +79,6 @@ const Dashboard = () => {
       console.log('📊 API Response Dashboard:', JSON.stringify(response, null, 2));
       
       if (response.status === 'success') {
-        // Nettoyer et corriger les données avant de les utiliser
         const cleanedData = cleanAPIData(response.data);
         setStats(cleanedData);
         prepareChartData(cleanedData);
@@ -77,17 +91,14 @@ const Dashboard = () => {
     }
   };
 
-  // Fonction pour nettoyer les données corrompues de l'API
   const cleanAPIData = (data) => {
     console.log('🧹 Nettoyage des données API...');
     
-    // Corriger les montants concaténés
     const teamCollected = parseFloat(data.team_members?.montant_collecte || 0);
     const adherentCollected = parseFloat(data.adherents?.montant_collecte || 0);
     const teamExpected = parseFloat(data.team_members?.montant_attendu || 0);
     const adherentExpected = parseFloat(data.adherents?.montant_attendu || 0);
     
-    // Calculer les vraies valeurs
     const totalCollected = teamCollected + adherentCollected;
     const totalExpected = teamExpected + adherentExpected;
     const globalRate = totalExpected > 0 ? ((totalCollected / totalExpected) * 100).toFixed(1) : 0;
@@ -107,13 +118,12 @@ const Dashboard = () => {
         cotisations_collectees: totalCollected,
         cotisations_attendues: totalExpected,
         taux_recouvrement: parseFloat(globalRate),
-        recettes_autres: 0 // Autres recettes pour ce mois
+        recettes_autres: 0
       }
     };
   };
 
   const prepareChartData = (data) => {
-    // Données d'évolution (6 derniers mois)
     const evolutionData = data.evolution_6_mois?.map(item => ({
       month: `${item.month}/${item.year}`,
       team_collected: parseFloat(item.team_collected) || 0,
@@ -121,7 +131,6 @@ const Dashboard = () => {
       total: (parseFloat(item.team_collected) || 0) + (parseFloat(item.adherent_collected) || 0)
     })) || [];
 
-    // Données pour graphique en secteurs des catégories
     const categoriesData = [
       { name: 'Team Members', value: parseFloat(data.team_members?.montant_collecte) || 0, color: '#3b82f6' },
       { name: 'Adhérents', value: parseFloat(data.adherents?.montant_collecte) || 0, color: '#10b981' },
@@ -129,7 +138,6 @@ const Dashboard = () => {
       { name: 'Dépenses', value: parseFloat(data.mois_courant?.depenses) || 0, color: '#ef4444' }
     ].filter(item => item.value > 0);
 
-    // Données de comparaison contributions
     const contributionsData = [
       {
         category: 'Team Members',
@@ -152,11 +160,9 @@ const Dashboard = () => {
     });
   };
 
-  // Calcul des vraies tendances pour le premier mois
   const calculateFirstMonthTrends = () => {
     if (!stats) return { solde: 0, cotisations: 0, transactions: 0, teamMembers: 0 };
     
-    // Récupération des taux de réalisation
     const teamRate = parseFloat(stats.team_members?.taux_recouvrement || 0);
     const adherentRate = parseFloat(stats.adherents?.taux_recouvrement || 0);
     const globalRate = parseFloat(stats.mois_courant?.taux_recouvrement || 0);
@@ -165,10 +171,7 @@ const Dashboard = () => {
     console.log('📈 Calcul des tendances:', { teamRate, adherentRate, globalRate, soldeGlobal });
     
     return {
-      // Tendance solde : positive si > 0
       solde: soldeGlobal > 0 ? Math.min((soldeGlobal / 1000), 20) : 0,
-      
-      // Tendance cotisations : basée sur le taux de recouvrement global
       cotisations: globalRate > 50 ? 
         Math.min((globalRate - 50) * 0.5, 15) : 
         globalRate > 20 ? 
@@ -176,12 +179,8 @@ const Dashboard = () => {
           globalRate > 0 ? 
             -(30 - globalRate) * 0.2 : 
             -10,
-      
-      // Tendance transactions : basée sur le nombre de transactions
       transactions: stats.transactions?.total_mois > 10 ? 
         Math.min((stats.transactions.total_mois - 10) * 1.2, 25) : 0,
-      
-      // Tendance team members : basée sur leur taux spécifique
       teamMembers: teamRate > 50 ? 
         Math.min((teamRate - 50) * 0.4, 12) :
         teamRate > 20 ? 
@@ -196,7 +195,6 @@ const Dashboard = () => {
     return calculateFirstMonthTrends();
   };
 
-  // Calcul du pourcentage d'objectif global atteint (corrigé)
   const calculateGlobalObjectiveRate = () => {
     if (!stats) return 0;
     
@@ -207,7 +205,6 @@ const Dashboard = () => {
     return parseFloat(((totalCollected / totalExpected) * 100).toFixed(1));
   };
 
-  // Formatage SANS raccourcis pour les montants principaux
   const formatAmount = (amount) => {
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
     if (isNaN(numAmount) || numAmount === null || numAmount === undefined) {
@@ -219,7 +216,6 @@ const Dashboard = () => {
     }).format(Math.round(numAmount)) + ' FCFA';
   };
 
-  // Formatage COMPLET pour les stats cards (pas de K ou M)
   const formatFullAmount = (amount) => {
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
     if (isNaN(numAmount) || numAmount === null || numAmount === undefined) {
@@ -231,7 +227,6 @@ const Dashboard = () => {
     }).format(Math.round(numAmount));
   };
 
-  // Formatage court SEULEMENT pour les graphiques
   const formatShortAmount = (amount) => {
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
     if (isNaN(numAmount) || numAmount === null || numAmount === undefined) {
@@ -246,7 +241,42 @@ const Dashboard = () => {
     return Math.round(numAmount).toString();
   };
 
-  // Composant Tooltip personnalisé
+  // ✨ NOUVEAU - Fonctions pour les rapports PDF
+  const handleDownloadReport = async (reportType) => {
+    setLoadingReport(reportType);
+    
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1;
+    
+    try {
+      if (reportType === 'current-month') {
+        await pdfAPI.downloadFinancialReport({ 
+          year: currentYear, 
+          month: currentMonth 
+        });
+        toast.success('Rapport mensuel téléchargé !');
+      } else if (reportType === 'last-month') {
+        const lastMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+        const year = currentMonth === 1 ? currentYear - 1 : currentYear;
+        await pdfAPI.downloadFinancialReport({ 
+          year, 
+          month: lastMonth 
+        });
+        toast.success('Rapport du mois dernier téléchargé !');
+      } else if (reportType === 'current-year') {
+        await pdfAPI.downloadFinancialReport({ 
+          year: currentYear 
+        });
+        toast.success('Rapport annuel téléchargé !');
+      }
+    } catch (error) {
+      toast.error('Erreur lors du téléchargement');
+      console.error('Erreur rapport:', error);
+    } finally {
+      setLoadingReport(null);
+    }
+  };
+
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
@@ -348,6 +378,172 @@ const Dashboard = () => {
     );
   };
 
+  // ✨ NOUVEAU - Composant Section Rapports PDF (intégré directement)
+  const ReportsSection = () => {
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1;
+
+    const quickReports = [
+      {
+        id: 'current-month',
+        title: 'Rapport du mois en cours',
+        description: new Date().toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
+        icon: Calendar,
+        color: '#FF8C00'
+      },
+      {
+        id: 'last-month',
+        title: 'Rapport du mois dernier',
+        description: new Date(currentYear, currentMonth - 2, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
+        icon: Calendar,
+        color: '#3b82f6'
+      },
+      {
+        id: 'current-year',
+        title: 'Rapport annuel',
+        description: `Année ${currentYear}`,
+        icon: TrendingUp,
+        color: '#10b981'
+      }
+    ];
+
+    return (
+      <div className="reports-section" style={{
+        background: 'white',
+        borderRadius: '16px',
+        padding: '28px',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+        marginBottom: '24px'
+      }}>
+        <div className="section-header" style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <FileText size={24} style={{ color: '#FF8C00' }} />
+            <div>
+              <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600, color: '#1f2937' }}>
+                Rapports Financiers
+              </h2>
+              <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: '#6b7280' }}>
+                Générez et téléchargez vos rapports en PDF
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          gap: '16px',
+          marginBottom: '24px'
+        }}>
+          {quickReports.map(report => {
+            const Icon = report.icon;
+            const isLoading = loadingReport === report.id;
+            
+            return (
+              <button
+                key={report.id}
+                onClick={() => handleDownloadReport(report.id)}
+                disabled={isLoading}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '16px',
+                  padding: '20px',
+                  background: 'white',
+                  border: '2px solid #e5e7eb',
+                  borderRadius: '12px',
+                  cursor: isLoading ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.3s ease',
+                  textAlign: 'left',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  opacity: isLoading ? 0.6 : 1
+                }}
+                onMouseOver={(e) => {
+                  if (!isLoading) {
+                    e.currentTarget.style.borderColor = report.color;
+                    e.currentTarget.style.transform = 'translateY(-4px)';
+                    e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.1)';
+                  }
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.borderColor = '#e5e7eb';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              >
+                <div style={{
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: `${report.color}15`,
+                  flexShrink: 0
+                }}>
+                  <Icon size={24} style={{ color: report.color }} />
+                </div>
+                
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h3 style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: 600, color: '#1f2937' }}>
+                    {report.title}
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '13px', color: '#6b7280' }}>
+                    {report.description}
+                  </p>
+                </div>
+                
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '8px',
+                  background: '#f3f4f6',
+                  color: '#6b7280',
+                  flexShrink: 0
+                }}>
+                  {isLoading ? (
+                    <div style={{
+                      width: '20px',
+                      height: '20px',
+                      border: '2px solid #e5e7eb',
+                      borderTopColor: report.color,
+                      borderRadius: '50%',
+                      animation: 'spin 0.8s linear infinite'
+                    }} />
+                  ) : (
+                    <ChevronRight size={20} />
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{
+          display: 'flex',
+          gap: '24px',
+          padding: '16px',
+          background: '#f9fafb',
+          borderRadius: '10px',
+          flexWrap: 'wrap'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: '#6b7280' }}>
+            <Download size={16} style={{ color: '#FF8C00' }} />
+            <span>Les rapports sont générés au format PDF professionnel</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', color: '#6b7280' }}>
+            <FileText size={16} style={{ color: '#FF8C00' }} />
+            <span>Incluent statistiques, graphiques et signature officielle</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="dashboard-loading">
@@ -397,7 +593,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Stats Cards Grid avec VRAIS montants COMPLETS */}
+      {/* Stats Cards Grid */}
       <div className="stats-grid modern">
         <StatCard
           title="Solde Global"
@@ -432,6 +628,9 @@ const Dashboard = () => {
           delay={300}
         />
       </div>
+
+      {/* ✨ NOUVEAU - Section Rapports PDF */}
+      <ReportsSection />
 
       {/* Graphiques */}
       <div className="dashboard-charts modern">
@@ -596,6 +795,13 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Style pour l'animation de spin */}
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 };

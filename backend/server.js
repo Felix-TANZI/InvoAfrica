@@ -1,7 +1,7 @@
 /*   Projet : InvoAfrica
      @Auteur : NZIKO Felix Andre
      Email : tanzifelix@gmail.com
-     version : beta 1.0
+     version : beta 1.0 - AVEC PDF
 
      Instagram : felix_tanzi
      GitHub : Felix-TANZI
@@ -95,6 +95,7 @@ app.use('/api/categories', require('./src/routes/categoryRoutes'));
 app.use('/api/contributions', require('./src/routes/contributionRoutes'));
 app.use('/api/members', require('./src/routes/memberRoutes'));
 app.use('/api/dashboard', require('./src/routes/dashboardRoutes'));
+app.use('/api/pdf', require('./src/routes/pdfRoutes')); // ✨ NOUVEAU - Routes PDF
 // app.use('/api/reports', require('./src/routes/reportRoutes'));
 
 
@@ -162,6 +163,7 @@ const startServer = async () => {
       console.log(`🏥 Health Check: http://localhost:${PORT}/health`);
       console.log(`🌍 Environnement: ${process.env.NODE_ENV || 'development'}`);
       console.log(`📊 Base de données: ${process.env.DB_NAME}`);
+      console.log(`📄 Routes PDF: http://localhost:${PORT}/api/pdf`);
       console.log('========================================\n');
       
       // Démarrer le scheduler automatique des cotisations

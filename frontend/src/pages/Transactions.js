@@ -1,7 +1,7 @@
 /*   Projet : InvoAfrica
      @Auteur : NZIKO Felix Andre
      Email : tanzifelix@gmail.com
-     version : beta 1.0 
+     version : beta 1.0 - AVEC PDF
 
      Instagram : felix_tanzi
      GitHub : Felix-TANZI
@@ -39,6 +39,7 @@ import { transactionAPI, categoryAPI } from '../services/api';
 import { usePermissions } from '../hooks/useAuth';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import TransactionForm from '../components/forms/TransactionForm';
+import PdfExportButtons, { QuickPdfAction } from '../components/pdf/PdfExportButtons';
 import toast from 'react-hot-toast';
 import './Transactions.css';
 
@@ -337,10 +338,11 @@ const Transactions = () => {
               Actualiser
             </button>
 
-            <button className="btn-secondary" title="Exporter">
-              <Download size={18} />
-              Exporter
-            </button>
+            {/* ✨ NOUVEAU - Bouton PDF Export */}
+            <PdfExportButtons 
+              variant="transaction-list"
+              filters={filters}
+            />
             
             <button 
               className="btn-primary"
@@ -727,6 +729,14 @@ const TransactionTable = ({
                       <Eye size={14} />
                     </button>
                     
+                    {/* ✨ NOUVEAU - Bouton PDF rapide pour transactions validées */}
+                    {transaction.status === 'validee' && (
+                      <QuickPdfAction 
+                        transactionId={transaction.id}
+                        status={transaction.status}
+                      />
+                    )}
+                    
                     {transaction.status === 'en_attente' && (
                       <button 
                         className="action-btn edit" 
@@ -839,6 +849,14 @@ const TransactionCards = ({
               <Eye size={14} />
               Voir
             </button>
+            
+            {/* ✨ NOUVEAU - Bouton reçu pour transactions validées */}
+            {transaction.status === 'validee' && (
+              <PdfExportButtons 
+                variant="receipt"
+                transactionId={transaction.id}
+              />
+            )}
             
             {transaction.status === 'en_attente' && (
               <button 

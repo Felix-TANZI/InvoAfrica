@@ -178,4 +178,6 @@ export const userAPI = {
   resetPassword: (id, data) => api.post(`/users/${id}/reset-password`, data),
 };
 
+export { default as pdfAPI } from './pdfAPI';
+
 export default api;

@@ -1,0 +1,163 @@
+/*   Projet : InvoAfrica
+     @Auteur : NZIKO Felix Andre
+     Email : tanzifelix@gmail.com
+     version : beta 1.0 - PDF Buttons Styles
+
+     Instagram : felix_tanzi
+     GitHub : Felix-TANZI
+     Linkedin : Felix TANZI */
+
+/* Boutons PDF principaux */
+.pdf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.pdf-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.pdf-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.pdf-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Bouton Export Liste */
+.pdf-btn.export-btn {
+  background: linear-gradient(135deg, #FF8C00 0%, #FFA500 100%);
+  color: white;
+}
+
+.pdf-btn.export-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #FFA500 0%, #FFB52E 100%);
+}
+
+/* Bouton Reçu */
+.pdf-btn.receipt-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.pdf-btn.receipt-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+
+/* Bouton Rapport */
+.pdf-btn.report-btn {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+}
+
+.pdf-btn.report-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+}
+
+/* Bouton Relevé Membre */
+.pdf-btn.statement-btn {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  color: white;
+}
+
+.pdf-btn.statement-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+}
+
+/* Groupe de boutons */
+.pdf-buttons-group {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Bouton d'action rapide (petit, dans tableau) */
+.quick-pdf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: #FF8C00;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.quick-pdf-btn:hover:not(:disabled) {
+  background: #FFA500;
+  transform: scale(1.1);
+}
+
+.quick-pdf-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Animation spinning pour le loading */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .pdf-btn {
+    padding: 8px 14px;
+    font-size: 13px;
+    gap: 6px;
+  }
+  
+  .pdf-btn span {
+    display: none;
+  }
+  
+  .pdf-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .pdf-buttons-group {
+    gap: 8px;
+  }
+}
+
+/* Animations d'apparition */
+.pdf-btn {
+  animation: fadeInUp 0.3s ease;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

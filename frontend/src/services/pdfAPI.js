@@ -7,7 +7,7 @@
      GitHub : Felix-TANZI
      Linkedin : Felix TANZI */
 
-import api from './api';
+import pdfApiClient from './pdfAPIClient';
 
 /**
  * Service pour gérer les exports PDF
@@ -18,12 +18,10 @@ const pdfAPI = {
    */
   downloadReceipt: async (transactionId) => {
     try {
-      const response = await api.get(`/pdf/transactions/${transactionId}/receipt`, {
-        responseType: 'blob' // Important pour les fichiers binaires
-      });
+      const response = await pdfApiClient.get(`/pdf/transactions/${transactionId}/receipt`);
       
       // Créer un lien de téléchargement
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const url = window.URL.createObjectURL(response.data);
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', `Recu_Transaction_${transactionId}.pdf`);
@@ -34,7 +32,7 @@ const pdfAPI = {
       
       return { success: true };
     } catch (error) {
-      console.error('Erreur téléchargement reçu:', error);
+      console.error('❌ Erreur téléchargement reçu:', error);
       throw error.response?.data || { message: 'Erreur lors du téléchargement du reçu' };
     }
   },
@@ -56,12 +54,10 @@ const pdfAPI = {
       if (filters.amountMin) params.append('amount_min', filters.amountMin);
       if (filters.amountMax) params.append('amount_max', filters.amountMax);
       
-      const response = await api.get(`/pdf/transactions/export?${params.toString()}`, {
-        responseType: 'blob'
-      });
+      const response = await pdfApiClient.get(`/pdf/transactions/export?${params.toString()}`);
       
       // Télécharger le fichier
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const url = window.URL.createObjectURL(response.data);
       const link = document.createElement('a');
       link.href = url;
       
@@ -75,7 +71,7 @@ const pdfAPI = {
       
       return { success: true };
     } catch (error) {
-      console.error('Erreur export liste:', error);
+      console.error('❌ Erreur export liste:', error);
       throw error.response?.data || { message: 'Erreur lors de l\'export' };
     }
   },
@@ -85,6 +81,8 @@ const pdfAPI = {
    */
   downloadFinancialReport: async (options = {}) => {
     try {
+      console.log('📄 Génération rapport avec options:', options);
+      
       const params = new URLSearchParams();
       
       if (options.year) params.append('year', options.year);
@@ -92,12 +90,12 @@ const pdfAPI = {
       if (options.start_date) params.append('start_date', options.start_date);
       if (options.end_date) params.append('end_date', options.end_date);
       
-      const response = await api.get(`/pdf/report/financial?${params.toString()}`, {
-        responseType: 'blob'
-      });
+      const response = await pdfApiClient.get(`/pdf/report/financial?${params.toString()}`);
+      
+      console.log('✅ Réponse reçue, taille:', response.data.size);
       
       // Télécharger le fichier
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const url = window.URL.createObjectURL(response.data);
       const link = document.createElement('a');
       link.href = url;
       
@@ -115,9 +113,11 @@ const pdfAPI = {
       link.remove();
       window.URL.revokeObjectURL(url);
       
+      console.log('✅ Téléchargement réussi:', filename);
+      
       return { success: true };
     } catch (error) {
-      console.error('Erreur rapport financier:', error);
+      console.error('❌ Erreur rapport financier:', error);
       throw error.response?.data || { message: 'Erreur lors de la génération du rapport' };
     }
   },
@@ -127,12 +127,10 @@ const pdfAPI = {
    */
   downloadMemberStatement: async (memberId) => {
     try {
-      const response = await api.get(`/pdf/members/${memberId}/statement`, {
-        responseType: 'blob'
-      });
+      const response = await pdfApiClient.get(`/pdf/members/${memberId}/statement`);
       
       // Télécharger le fichier
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const url = window.URL.createObjectURL(response.data);
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', `Releve_Membre_${memberId}.pdf`);
@@ -143,29 +141,26 @@ const pdfAPI = {
       
       return { success: true };
     } catch (error) {
-      console.error('Erreur relevé membre:', error);
+      console.error('❌ Erreur relevé membre:', error);
       throw error.response?.data || { message: 'Erreur lors du téléchargement' };
     }
   },
   
   /**
    * Vérifier l'état des assets PDF
+   * Note: Cette requête retourne du JSON, pas un blob
    */
   checkAssets: async () => {
     try {
+      // Pour cette requête, on utilise l'API normale car elle retourne du JSON
+      const { default: api } = await import('./api');
       const response = await api.get('/pdf/check-assets');
       return response.data;
     } catch (error) {
-      console.error('Erreur vérification assets:', error);
+      console.error('❌ Erreur vérification assets:', error);
       throw error.response?.data || { message: 'Erreur lors de la vérification' };
     }
   }
 };
 
 export default pdfAPI;
-
-/**
- * IMPORTANT: Ajouter cet export dans frontend/src/services/api.js:
- * 
- * export { default as pdfAPI } from './pdfAPI';
- */

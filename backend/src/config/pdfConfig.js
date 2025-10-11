@@ -1,11 +1,6 @@
 /*   Projet : InvoAfrica
      @Auteur : NZIKO Felix Andre
-     Email : tanzifelix@gmail.com
-     version : beta 1.0 - PDF Configuration
-
-     Instagram : felix_tanzi
-     GitHub : Felix-TANZI
-     Linkedin : Felix TANZI */
+     version : beta 2.0 - PDF Configuration */
 
 const path = require('path');
 
@@ -19,7 +14,6 @@ const CLUB_INFO = {
   email: 'clubinfoenspy@gmail.com',
   website: 'gi-enspy.com',
   
-  // Signataire
   signatory: {
     name: 'Felix NZIKO',
     title: 'Chef de la Cellule Financière',
@@ -27,38 +21,45 @@ const CLUB_INFO = {
     phone: '+237 698200792'
   },
   
-  // Couleurs du club (orange)
+  // THÈME BLEU
   colors: {
-    primary: '#FF8C00',      // Orange foncé
-    secondary: '#FFA500',    // Orange
-    light: '#FFE5B4',        // Orange clair
-    dark: '#CC7000',         // Orange très foncé
-    text: '#333333',
-    textLight: '#666666',
+    primary: '#004aad',
+    primaryLight: '#e6f0ff',
+    secondary: '#0066cc',
+    accent: '#0088ff',
+    
+    text: '#111111',
+    textLight: '#555555',
+    textMuted: '#888888',
+    
     success: '#10b981',
-    danger: '#ef4444'
+    warning: '#f59e0b',
+    danger: '#ef4444',
+    
+    bgWhite: '#FFFFFF',
+    bgLight: '#F9FAFB',
+    bgBlueLight: '#e6f0ff',
+    
+    border: '#E5E7EB',
+    borderDark: '#D1D5DB'
   }
 };
 
-// Chemins des assets
 const ASSETS_PATH = {
   logo: path.join(__dirname, '../assets/logo-ClubGI.png'),
   signature: path.join(__dirname, '../assets/signFelix.png'),
 };
 
-// Configuration des documents PDF
 const PDF_CONFIG = {
-  // Marges du document
   margins: {
-    top: 60,
-    bottom: 60,
+    top: 70,
+    bottom: 80,
     left: 50,
     right: 50
   },
   
-  // Tailles de police
   fonts: {
-    title: 20,
+    title: 22,
     heading: 16,
     subheading: 14,
     body: 11,
@@ -66,81 +67,97 @@ const PDF_CONFIG = {
     tiny: 8
   },
   
-  // Dimensions
   dimensions: {
-    pageWidth: 595.28,  // A4 width in points
-    pageHeight: 841.89, // A4 height in points
-    logoWidth: 80,
-    logoHeight: 80,
-    signatureWidth: 120,
-    signatureHeight: 60,
-    qrCodeSize: 80
+    pageWidth: 595.28,
+    pageHeight: 841.89,
+    logoWidth: 70,
+    logoHeight: 70,
+    signatureWidth: 100,
+    signatureHeight: 50,
+    qrCodeSize: 90
   },
   
-  // Options par défaut
   defaultOptions: {
     size: 'A4',
     margin: 50,
     bufferPages: true,
-    autoFirstPage: false
+    autoFirstPage: false,
+    compress: true
+  },
+  
+  table: {
+    headerHeight: 30,
+    rowHeight: 25,
+    rowHeightAuto: true,
+    padding: 8,
+    borderWidth: 0.5,
+    alternateRows: true
   }
 };
 
-// Types de documents PDF
 const PDF_TYPES = {
-  RECEIPT: 'receipt',              // Reçu individuel
-  TRANSACTION_LIST: 'transaction_list', // Liste des transactions
-  FINANCIAL_REPORT: 'financial_report', // Rapport financier
-  MEMBER_STATEMENT: 'member_statement'  // Relevé membre
+  RECEIPT: 'receipt',
+  TRANSACTION_LIST: 'transaction_list',
+  FINANCIAL_REPORT: 'financial_report',
+  MEMBER_STATEMENT: 'member_statement'
 };
 
-// Templates de textes
+
 const PDF_TEXTS = {
   receipt: {
     title: 'REÇU DE TRANSACTION',
-    subtitle: 'Document officiel',
-    footer: 'Ce document est généré automatiquement et certifié par le Club GI.',
-    qrText: 'Scannez pour vérifier'
+    subtitle: 'Document officiel du Club GI',
+    footer: 'Document généré automatiquement par le Système de gestion du Club GI — gi-enspy.com',
+    qrText: 'Scannez pour vérifier\nla validité du reçu en ligne',
+    certification: 'Signé électroniquement et certifié par le Club GI.',
+    location: 'Yaoundé'
   },
   
   transactionList: {
     title: 'LISTE DES TRANSACTIONS',
     subtitle: 'Export des données financières',
-    footer: 'Document généré par InvoAfrica - Système de gestion du Club GI'
+    footer: 'Document généré automatiquement par le Système de gestion du Club GI — gi-enspy.com',
+    noData: 'Aucune transaction trouvée pour les critères sélectionnés'
   },
   
   financialReport: {
     title: 'RAPPORT FINANCIER',
-    subtitle: 'Analyse de la période',
-    footer: 'Rapport officiel du Club Génie Informatique'
+    subtitle: 'Analyse détaillée de la période',
+    footer: 'Rapport officiel du Club Génie Informatique',
+    commentSection: 'Observations et Commentaires',
+    summaryTitle: 'Résumé Financier'
   },
   
   memberStatement: {
     title: 'RELEVÉ DE COTISATIONS',
     subtitle: 'Historique des paiements',
-    footer: 'Document officiel du Club GI'
+    footer: 'Document officiel du Club GI',
+    memberInfo: 'Informations du Membre'
   }
 };
 
-// Statuts et types traduits
+//  Statuts avec icônes ASCII simples
 const STATUS_LABELS = {
-  'en_attente': 'En attente',
-  'validee': 'Validée',
-  'annulee': 'Annulée'
+  'en_attente': { text: 'En attente', color: '#f59e0b', icon: '◷' },
+  'validee': { text: 'Validée', color: '#10b981', icon: '✓' },
+  'annulee': { text: 'Annulée', color: '#ef4444', icon: '✗' }
 };
 
 const TYPE_LABELS = {
-  'recette': 'Recette',
-  'depense': 'Dépense'
+  'recette': { text: 'Recette', color: '#10b981', icon: '↗' },
+  'depense': { text: 'Dépense', color: '#ef4444', icon: '↘' }
 };
 
 const PAYMENT_MODE_LABELS = {
   'cash': 'Espèces',
   'om': 'Orange Money',
   'momo': 'Mobile Money',
-  'virement': 'Virement',
+  'virement': 'Virement bancaire',
   'cheque': 'Chèque'
 };
+
+const getStatusLabel = (status) => STATUS_LABELS[status] || { text: status, color: '#666666', icon: '' };
+const getTypeLabel = (type) => TYPE_LABELS[type] || { text: type, color: '#666666', icon: '' };
 
 module.exports = {
   CLUB_INFO,
@@ -150,5 +167,7 @@ module.exports = {
   PDF_TEXTS,
   STATUS_LABELS,
   TYPE_LABELS,
-  PAYMENT_MODE_LABELS
+  PAYMENT_MODE_LABELS,
+  getStatusLabel,
+  getTypeLabel
 };

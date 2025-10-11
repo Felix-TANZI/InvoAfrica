@@ -1,7 +1,7 @@
 /*   Projet : InvoAfrica
      @Auteur : NZIKO Felix Andre
      Email : tanzifelix@gmail.com
-     version : beta 1.0 - PDF Controller
+     version : beta 2.0 - PDF Controller CORRIGÉ
 
      Instagram : felix_tanzi
      GitHub : Felix-TANZI
@@ -22,7 +22,6 @@ const generateTransactionReceipt = async (req, res) => {
       return sendResponse(res, 400, 'ID de transaction invalide');
     }
     
-    // Récupérer la transaction avec toutes ses infos
     const transactions = await executeQuery(`
       SELECT 
         t.*,
@@ -43,16 +42,13 @@ const generateTransactionReceipt = async (req, res) => {
     
     const transaction = transactions[0];
     
-    // Générer le PDF
     const doc = await PDFService.generateReceipt(transaction);
     const pdfBuffer = await PDFService.toBuffer(doc);
     
-    // Définir les headers pour le téléchargement
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=Recu_${transaction.reference}.pdf`);
     res.setHeader('Content-Length', pdfBuffer.length);
     
-    // Envoyer le PDF
     res.send(pdfBuffer);
     
     console.log('✅ Reçu généré pour:', transaction.reference);
@@ -79,7 +75,6 @@ const exportTransactionsList = async (req, res) => {
       amount_max
     } = req.query;
     
-    // Construire les filtres (même logique que getTransactions)
     let whereConditions = [];
     let queryParams = [];
     
@@ -147,6 +142,24 @@ const exportTransactionsList = async (req, res) => {
       ORDER BY t.transaction_date DESC
       LIMIT 1000
     `, queryParams);
+
+    // ✅ CORRECTION : Créer nouvelle variable au lieu de réassigner
+    const transactionsWithMembers = transactions.map(t => {
+      let memberName = '';
+      
+      // Pour cotisations/adhésions, extraire le nom après " - "
+      if ((t.category_name === 'Cotisations' || t.category_name === 'Adhésions') && t.description) {
+        const parts = t.description.split(' - ');
+        if (parts.length > 1) {
+          memberName = parts[1].trim();
+        }
+      } else if (t.contact_person) {
+        // Sinon utiliser contact_person
+        memberName = t.contact_person.trim();
+      }
+      
+      return { ...t, member_name: memberName };
+    });
     
     // Calculer les statistiques
     const statsQuery = `
@@ -162,21 +175,19 @@ const exportTransactionsList = async (req, res) => {
     const stats = statsResult[0] || {};
     stats.solde = (parseFloat(stats.montant_recettes) || 0) - (parseFloat(stats.montant_depenses) || 0);
     
-    // Générer le PDF
+    // Générer le PDF avec les transactions enrichies
     const filters = { status, type, category_id, date_from, date_to, search, amount_min, amount_max };
-    const doc = await PDFService.generateTransactionList(transactions, filters, stats);
+    const doc = await PDFService.generateTransactionList(transactionsWithMembers, filters, stats);
     const pdfBuffer = await PDFService.toBuffer(doc);
     
-    // Définir les headers
     const filename = `Transactions_${new Date().toISOString().split('T')[0]}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
     res.setHeader('Content-Length', pdfBuffer.length);
     
-    // Envoyer le PDF
     res.send(pdfBuffer);
     
-    console.log('✅ Liste exportée:', transactions.length, 'transactions');
+    console.log('✅ Liste exportée:', transactionsWithMembers.length, 'transactions');
     
   } catch (error) {
     console.error('❌ Erreur export liste:', error);
@@ -213,7 +224,6 @@ const generateFinancialReport = async (req, res) => {
       period = 'Toute la période';
     }
     
-    // Statistiques générales
     const statsQuery = `
       SELECT 
         SUM(CASE WHEN t.type = 'recette' AND t.status = 'validee' THEN t.amount ELSE 0 END) as total_recettes,
@@ -224,7 +234,6 @@ const generateFinancialReport = async (req, res) => {
     
     const statsResult = await executeQuery(statsQuery, params);
     
-    // Statistiques par catégorie
     const categoryStatsQuery = `
       SELECT 
         c.name as category_name,
@@ -241,7 +250,6 @@ const generateFinancialReport = async (req, res) => {
     
     const categoryStats = await executeQuery(categoryStatsQuery, params);
     
-    // Préparer les données pour le PDF
     const reportData = {
       period,
       totalRecettes: statsResult[0].total_recettes || 0,
@@ -249,17 +257,14 @@ const generateFinancialReport = async (req, res) => {
       byCategory: categoryStats
     };
     
-    // Générer le PDF
     const doc = await PDFService.generateFinancialReport(reportData);
     const pdfBuffer = await PDFService.toBuffer(doc);
     
-    // Définir les headers
     const filename = `Rapport_Financier_${period.replace(/\s/g, '_')}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
     res.setHeader('Content-Length', pdfBuffer.length);
     
-    // Envoyer le PDF
     res.send(pdfBuffer);
     
     console.log('✅ Rapport généré pour:', period);
@@ -281,7 +286,6 @@ const generateMemberStatement = async (req, res) => {
       return sendResponse(res, 400, 'ID de membre invalide');
     }
     
-    // Récupérer les infos du membre
     const members = await executeQuery(
       'SELECT * FROM members WHERE id = ?',
       [parseInt(id)]
@@ -293,7 +297,6 @@ const generateMemberStatement = async (req, res) => {
     
     const member = members[0];
     
-    // Récupérer les cotisations du membre
     const contributions = await executeQuery(`
       SELECT 
         c.*,
@@ -304,17 +307,14 @@ const generateMemberStatement = async (req, res) => {
       ORDER BY c.due_date DESC
     `, [parseInt(id)]);
     
-    // Générer le PDF
     const doc = await PDFService.generateMemberStatement(member, contributions);
     const pdfBuffer = await PDFService.toBuffer(doc);
     
-    // Définir les headers
     const filename = `Releve_${member.name.replace(/\s/g, '_')}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
     res.setHeader('Content-Length', pdfBuffer.length);
     
-    // Envoyer le PDF
     res.send(pdfBuffer);
     
     console.log('✅ Relevé généré pour:', member.name);

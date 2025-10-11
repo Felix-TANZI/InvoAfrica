@@ -1,61 +1,52 @@
 /*   Projet : InvoAfrica
      @Auteur : NZIKO Felix Andre
-     Email : tanzifelix@gmail.com
-     version : beta 1.0 - PDF Helpers
-
-     Instagram : felix_tanzi
-     GitHub : Felix-TANZI
-     Linkedin : Felix TANZI */
+     version : beta 2.0 - PDF Helpers  */
 
 const QRCode = require('qrcode');
-const { CLUB_INFO, PDF_CONFIG } = require('../config/pdfConfig');
+const fs = require('fs');
+const { CLUB_INFO, PDF_CONFIG, PDF_TEXTS } = require('../config/pdfConfig');
 
 /**
- * Formater un montant en FCFA
+ * FORMATAGE DES MONTANTS 
  */
 const formatAmount = (amount) => {
-  const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+  const numAmount = typeof amount === 'string' ? parseFloat(amount.replace(/\s/g, '')) : amount;
   if (isNaN(numAmount)) return '0 FCFA';
   return new Intl.NumberFormat('fr-FR', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(Math.round(numAmount)) + ' FCFA';
+    useGrouping: true
+  }).format(Math.round(numAmount)).replace(/\s/g, ' ') + ' FCFA';
 };
 
 /**
  * Formater une date
  */
 const formatDate = (date, format = 'full') => {
+  if (!date) return 'N/A';
   const d = new Date(date);
+  if (isNaN(d.getTime())) return 'Date invalide';
   
-  if (format === 'full') {
-    return d.toLocaleDateString('fr-FR', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  }
+  const options = {
+    full: { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' },
+    short: { year: 'numeric', month: '2-digit', day: '2-digit' },
+    medium: { year: 'numeric', month: 'long', day: 'numeric' },
+    time: { hour: '2-digit', minute: '2-digit', second: '2-digit' },
+    datetime: { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }
+  };
   
-  if (format === 'short') {
-    return d.toLocaleDateString('fr-FR');
-  }
-  
-  if (format === 'time') {
-    return d.toLocaleTimeString('fr-FR');
-  }
-  
-  return d.toLocaleDateString('fr-FR');
+  return d.toLocaleDateString('fr-FR', options[format] || options.full);
 };
 
 /**
- * Générer un QR Code
+ * GÉNÉRATION QR CODE
  */
 const generateQRCode = async (data) => {
   try {
     const qrDataURL = await QRCode.toDataURL(data, {
-      width: PDF_CONFIG.dimensions.qrCodeSize,
-      margin: 1,
+      width: PDF_CONFIG.dimensions.qrCodeSize * 3,
+      margin: 2,
+      errorCorrectionLevel: 'M',
       color: {
         dark: CLUB_INFO.colors.primary,
         light: '#FFFFFF'
@@ -63,13 +54,33 @@ const generateQRCode = async (data) => {
     });
     return qrDataURL;
   } catch (error) {
-    console.error('Erreur génération QR Code:', error);
+    console.error('❌ Erreur génération QR Code:', error);
     return null;
   }
 };
 
 /**
- * Dessiner l'en-tête du document
+ *  Extraire le nom du membre
+ */
+const extractMemberName = (transaction) => {
+  // Priorité 1 : contact_person
+  if (transaction.contact_person) {
+    return transaction.contact_person.trim();
+  }
+  
+  // Priorité 2 : Extraire depuis description (format "Type mois année - NOM Prénom")
+  if (transaction.description) {
+    const parts = transaction.description.split(' - ');
+    if (parts.length > 1) {
+      return parts[parts.length - 1].trim();
+    }
+  }
+  
+  return '-';
+};
+
+/**
+ * EN-TÊTE MODERNISÉ
  */
 const drawHeader = (doc, title, subtitle, logoPath) => {
   const { colors } = CLUB_INFO;
@@ -77,321 +88,458 @@ const drawHeader = (doc, title, subtitle, logoPath) => {
   
   let y = margins.top;
   
-  // Bande orange en haut
-  doc.rect(0, 0, dimensions.pageWidth, 40)
+  // Bande bleue en haut
+  doc.rect(0, 0, dimensions.pageWidth, 50)
      .fill(colors.primary);
   
-  // Logo (si disponible)
-  try {
-    doc.image(logoPath, margins.left, y - 10, {
-      width: dimensions.logoWidth,
-      height: dimensions.logoHeight
-    });
-  } catch (error) {
-    console.error('Logo non trouvé:', error.message);
+  // Rectangle blanc pour le logo
+  doc.rect(margins.left - 5, y - 15, dimensions.logoWidth + 10, dimensions.logoHeight + 10)
+     .fillAndStroke('#FFFFFF', colors.border);
+  
+  // Logo
+  if (fs.existsSync(logoPath)) {
+    try {
+      doc.image(logoPath, margins.left, y - 10, {
+        width: dimensions.logoWidth,
+        height: dimensions.logoHeight,
+        fit: [dimensions.logoWidth, dimensions.logoHeight]
+      });
+    } catch (error) {
+      console.warn('⚠️ Logo introuvable:', error.message);
+    }
   }
   
   // Informations du club à droite
   const rightX = dimensions.pageWidth - margins.right;
+  const infoX = margins.left + dimensions.logoWidth + 30;
+  const infoWidth = rightX - infoX;
+  
   doc.fontSize(fonts.heading)
      .fillColor(colors.text)
-     .text(CLUB_INFO.name, margins.left + dimensions.logoWidth + 20, y, {
-       width: rightX - (margins.left + dimensions.logoWidth + 20),
-       align: 'right'
-     });
+     .font('Helvetica-Bold')
+     .text(CLUB_INFO.name, infoX, y, { width: infoWidth, align: 'right' });
   
   y += 20;
   doc.fontSize(fonts.small)
      .fillColor(colors.textLight)
-     .text(CLUB_INFO.address, margins.left + dimensions.logoWidth + 20, y, {
-       width: rightX - (margins.left + dimensions.logoWidth + 20),
-       align: 'right'
-     });
+     .font('Helvetica')
+     .text(CLUB_INFO.address, infoX, y, { width: infoWidth, align: 'right' });
   
   y += 12;
-  doc.text(CLUB_INFO.addressLine2, margins.left + dimensions.logoWidth + 20, y, {
-       width: rightX - (margins.left + dimensions.logoWidth + 20),
-       align: 'right'
-     });
+  doc.text(CLUB_INFO.addressLine2, infoX, y, { width: infoWidth, align: 'right' });
   
   y += 12;
-  doc.text(`Tél: ${CLUB_INFO.phone} | Email: ${CLUB_INFO.email}`, 
-           margins.left + dimensions.logoWidth + 20, y, {
-       width: rightX - (margins.left + dimensions.logoWidth + 20),
-       align: 'right'
-     });
+  doc.fontSize(fonts.tiny)
+     .text(`Tel: ${CLUB_INFO.phone}`, infoX, y, { width: infoWidth, align: 'right' });
   
-  y += 12;
+  y += 10;
+  doc.text(`Email: ${CLUB_INFO.email}`, infoX, y, { width: infoWidth, align: 'right' });
+  
+  y += 10;
   doc.fillColor(colors.primary)
-     .text(CLUB_INFO.website, margins.left + dimensions.logoWidth + 20, y, {
-       width: rightX - (margins.left + dimensions.logoWidth + 20),
+     .fontSize(fonts.small)
+     .text(`Web: ${CLUB_INFO.website}`, infoX, y, {
+       width: infoWidth,
        align: 'right',
-       link: `https://${CLUB_INFO.website}`
+       link: `https://${CLUB_INFO.website}`,
+       underline: true
      });
   
-  // Ligne séparatrice
-  y = margins.top + dimensions.logoHeight + 10;
+  // Double ligne séparatrice
+  y = margins.top + dimensions.logoHeight + 15;
+  
   doc.moveTo(margins.left, y)
      .lineTo(dimensions.pageWidth - margins.right, y)
      .strokeColor(colors.primary)
      .lineWidth(2)
      .stroke();
   
+  doc.moveTo(margins.left, y + 3)
+     .lineTo(dimensions.pageWidth - margins.right, y + 3)
+     .strokeColor(colors.primaryLight)
+     .lineWidth(1)
+     .stroke();
+  
   // Titre du document
-  y += 30;
+  y += 25;
+  const titleBoxY = y;
+  const titleBoxHeight = subtitle ? 60 : 40;
+  
+  doc.rect(margins.left, titleBoxY, dimensions.pageWidth - margins.left - margins.right, titleBoxHeight)
+     .fill(colors.bgBlueLight);
+  
+  y += 15;
   doc.fontSize(fonts.title)
      .fillColor(colors.primary)
+     .font('Helvetica-Bold')
      .text(title, margins.left, y, {
        width: dimensions.pageWidth - margins.left - margins.right,
        align: 'center'
      });
   
-  // Sous-titre
   if (subtitle) {
-    y += 25;
+    y += 28;
     doc.fontSize(fonts.body)
        .fillColor(colors.textLight)
+       .font('Helvetica')
        .text(subtitle, margins.left, y, {
          width: dimensions.pageWidth - margins.left - margins.right,
          align: 'center'
        });
   }
   
-  return y + 30; // Retourner la position Y après l'en-tête
+  return titleBoxY + titleBoxHeight + 20;
 };
 
 /**
- * Dessiner le pied de page
+ * PIED DE PAGE AMÉLIORÉ
  */
 const drawFooter = (doc, pageNumber, totalPages, footerText, signaturePath = null) => {
   const { colors } = CLUB_INFO;
   const { margins, fonts, dimensions } = PDF_CONFIG;
   
-  const footerY = dimensions.pageHeight - margins.bottom - 60;
+  const footerY = dimensions.pageHeight - margins.bottom - 10;
   
-  // Signature (si fournie)
-  if (signaturePath) {
+  // Signature (uniquement sur page 1)
+  if (signaturePath && pageNumber === 1 && fs.existsSync(signaturePath)) {
     try {
       const signX = dimensions.pageWidth - margins.right - dimensions.signatureWidth - 20;
-      const signY = footerY - dimensions.signatureHeight - 40;
+      const signY = footerY - dimensions.signatureHeight - 80;
       
-      // Cadre pour signature
       doc.fontSize(fonts.small)
          .fillColor(colors.textLight)
-         .text('Le Chef de la Cellule Financière', signX, signY - 15, {
+         .font('Helvetica')
+         .text('Certification', signX, signY - 20, {
            width: dimensions.signatureWidth + 20,
            align: 'center'
          });
       
-      // Image de signature
-      doc.image(signaturePath, signX + 10, signY, {
+      doc.rect(signX - 5, signY - 5, dimensions.signatureWidth + 10, dimensions.signatureHeight + 10)
+         .stroke(colors.border);
+      
+      doc.image(signaturePath, signX, signY, {
         width: dimensions.signatureWidth,
         height: dimensions.signatureHeight,
         fit: [dimensions.signatureWidth, dimensions.signatureHeight]
       });
       
-      // Nom du signataire
       doc.fontSize(fonts.body)
          .fillColor(colors.text)
-         .text(CLUB_INFO.signatory.name, signX, signY + dimensions.signatureHeight + 5, {
+         .font('Helvetica-Bold')
+         .text(CLUB_INFO.signatory.name, signX - 10, signY + dimensions.signatureHeight + 8, {
            width: dimensions.signatureWidth + 20,
            align: 'center'
          });
       
       doc.fontSize(fonts.small)
          .fillColor(colors.textLight)
-         .text(CLUB_INFO.signatory.title, signX, signY + dimensions.signatureHeight + 20, {
+         .font('Helvetica')
+         .text(CLUB_INFO.signatory.title, signX - 10, signY + dimensions.signatureHeight + 24, {
            width: dimensions.signatureWidth + 20,
            align: 'center'
          });
+      
+      doc.fontSize(fonts.tiny)
+         .text(`Fait à ${PDF_TEXTS.receipt.location}, le ${formatDate(new Date(), 'medium')}`, 
+               signX - 10, signY + dimensions.signatureHeight + 38, {
+           width: dimensions.signatureWidth + 20,
+           align: 'center'
+         });
+      
+      doc.fontSize(fonts.tiny)
+         .fillColor(colors.primary)
+         .text(PDF_TEXTS.receipt.certification, 
+               margins.left, signY + dimensions.signatureHeight + 20, {
+           width: signX - margins.left - 40,
+           align: 'left'
+         });
     } catch (error) {
-      console.error('Signature non trouvée:', error.message);
+      console.warn('⚠️ Signature introuvable:', error.message);
     }
   }
   
   // Ligne séparatrice
   doc.moveTo(margins.left, footerY)
      .lineTo(dimensions.pageWidth - margins.right, footerY)
-     .strokeColor(colors.light)
+     .strokeColor(colors.border)
      .lineWidth(1)
      .stroke();
   
   // Texte du pied de page
   doc.fontSize(fonts.tiny)
-     .fillColor(colors.textLight)
-     .text(footerText, margins.left, footerY + 10, {
+     .fillColor(colors.textMuted)
+     .font('Helvetica')
+     .text(footerText, margins.left, footerY + 8, {
        width: dimensions.pageWidth - margins.left - margins.right,
        align: 'center'
      });
   
-  // Numéro de page
-  doc.text(
-    `Page ${pageNumber} sur ${totalPages}`,
-    margins.left,
-    footerY + 25,
-    {
-      width: dimensions.pageWidth - margins.left - margins.right,
-      align: 'center'
-    }
-  );
-  
-  // Date et heure de génération
-  const now = new Date();
   doc.fontSize(fonts.tiny)
-     .text(
-       `Généré le ${formatDate(now, 'short')} à ${formatDate(now, 'time')}`,
-       margins.left,
-       footerY + 35,
-       {
-         width: dimensions.pageWidth - margins.left - margins.right,
-         align: 'center'
-       }
-     );
+     .text(`Page ${pageNumber} sur ${totalPages}`, margins.left, footerY + 20, {
+       width: dimensions.pageWidth - margins.left - margins.right,
+       align: 'center'
+     });
+  
+  const now = new Date();
+  doc.text(`Généré le ${formatDate(now, 'short')} à ${formatDate(now, 'time')}`, 
+           margins.left, footerY + 30, {
+       width: dimensions.pageWidth - margins.left - margins.right,
+       align: 'center'
+     });
 };
 
 /**
- * Dessiner un tableau
+ * TABLEAU AMÉLIORÉ
  */
 const drawTable = (doc, headers, rows, startY, options = {}) => {
   const { colors } = CLUB_INFO;
-  const { margins, fonts, dimensions } = PDF_CONFIG;
+  const { margins, fonts, dimensions, table } = PDF_CONFIG;
   
   const {
-    columnWidths = null, // Si null, largeurs égales
+    columnWidths = null,
     headerBg = colors.primary,
     headerTextColor = '#FFFFFF',
-    rowBg1 = '#FFFFFF',
-    rowBg2 = '#F9F9F9',
-    borderColor = colors.light,
+    rowBg1 = colors.bgWhite,
+    rowBg2 = colors.bgLight,
+    borderColor = colors.border,
     fontSize = fonts.small,
-    padding = 8
+    padding = table.padding,
+    alignRight = []
   } = options;
   
   let y = startY;
   const tableWidth = dimensions.pageWidth - margins.left - margins.right;
-  
-  // Calculer les largeurs de colonnes
   const colCount = headers.length;
   const colWidths = columnWidths || Array(colCount).fill(tableWidth / colCount);
   
-  // En-têtes
+  // EN-TÊTES
   let x = margins.left;
-  doc.fontSize(fonts.body).fillColor(headerTextColor);
+  doc.rect(margins.left, y, tableWidth, table.headerHeight)
+     .fillAndStroke(headerBg, colors.borderDark);
   
-  // Background des en-têtes
-  doc.rect(margins.left, y, tableWidth, 25)
-     .fill(headerBg);
-  
-  // Texte des en-têtes
-  doc.fillColor(headerTextColor);
+  doc.fontSize(fonts.body)
+     .fillColor(headerTextColor)
+     .font('Helvetica-Bold');
+     
   headers.forEach((header, i) => {
-    doc.text(header, x + padding, y + padding, {
+    const align = alignRight.includes(i) ? 'right' : 'left';
+    doc.text(header, x + padding, y + (table.headerHeight - fonts.body) / 2, {
       width: colWidths[i] - padding * 2,
-      align: 'left'
+      align: align
     });
     x += colWidths[i];
   });
   
-  y += 25;
+  y += table.headerHeight;
   
-  // Lignes du tableau
-  doc.fontSize(fontSize).fillColor(colors.text);
+  // LIGNES
+  doc.fontSize(fontSize)
+     .fillColor(colors.text)
+     .font('Helvetica');
   
   rows.forEach((row, rowIndex) => {
     x = margins.left;
-    const rowHeight = 20;
+    let maxHeight = table.rowHeight;
+    
+    // Nouvelle page si nécessaire
+    if (y + maxHeight > dimensions.pageHeight - margins.bottom - 100) {
+      doc.addPage();
+      y = margins.top;
+      
+      // Redessiner en-tête
+      x = margins.left;
+      doc.rect(margins.left, y, tableWidth, table.headerHeight)
+         .fillAndStroke(headerBg, colors.borderDark);
+      
+      doc.fontSize(fonts.body)
+         .fillColor(headerTextColor)
+         .font('Helvetica-Bold');
+         
+      headers.forEach((header, i) => {
+        const align = alignRight.includes(i) ? 'right' : 'left';
+        doc.text(header, x + padding, y + (table.headerHeight - fonts.body) / 2, {
+          width: colWidths[i] - padding * 2,
+          align: align
+        });
+        x += colWidths[i];
+      });
+      
+      y += table.headerHeight;
+      x = margins.left;
+      
+      doc.fontSize(fontSize)
+         .fillColor(colors.text)
+         .font('Helvetica');
+    }
     
     // Background alterné
     const bgColor = rowIndex % 2 === 0 ? rowBg1 : rowBg2;
-    doc.rect(margins.left, y, tableWidth, rowHeight)
+    doc.rect(margins.left, y, tableWidth, maxHeight)
        .fill(bgColor);
     
-    // Contenu des cellules
+    doc.rect(margins.left, y, tableWidth, maxHeight)
+       .stroke(borderColor);
+    
+    // Contenu cellules
     doc.fillColor(colors.text);
     row.forEach((cell, cellIndex) => {
-      doc.text(String(cell), x + padding, y + padding, {
+      const align = alignRight.includes(cellIndex) ? 'right' : 'left';
+      const cellText = cell === null || cell === undefined ? '' : String(cell);
+      
+      doc.text(cellText, x + padding, y + padding, {
         width: colWidths[cellIndex] - padding * 2,
-        align: cellIndex === row.length - 1 ? 'right' : 'left', // Dernière colonne à droite
-        ellipsis: true
+        align: align,
+        lineBreak: true,
+        height: maxHeight - padding * 2,
+        ellipsis: false
       });
+      
+      if (cellIndex < row.length - 1) {
+        doc.moveTo(x + colWidths[cellIndex], y)
+           .lineTo(x + colWidths[cellIndex], y + maxHeight)
+           .stroke(borderColor);
+      }
+      
       x += colWidths[cellIndex];
     });
     
-    y += rowHeight;
-    
-    // Vérifier si on doit créer une nouvelle page
-    if (y > dimensions.pageHeight - margins.bottom - 100) {
-      doc.addPage();
-      y = margins.top;
-    }
+    y += maxHeight;
   });
   
-  // Bordure finale
   doc.rect(margins.left, startY, tableWidth, y - startY)
-     .strokeColor(borderColor)
-     .lineWidth(0.5)
-     .stroke();
+     .stroke(colors.borderDark);
   
-  return y + 20; // Retourner la position Y après le tableau
+  return y + 20;
 };
 
 /**
- * Dessiner une section d'informations
+ * SECTION D'INFORMATIONS
  */
-const drawInfoSection = (doc, title, data, startY) => {
+const drawInfoSection = (doc, title, data, startY, options = {}) => {
   const { colors } = CLUB_INFO;
-  const { margins, fonts } = PDF_CONFIG;
+  const { margins, fonts, dimensions } = PDF_CONFIG;
+  const { bordered = true, bgColor = colors.bgLight } = options;
   
   let y = startY;
+  const contentWidth = dimensions.pageWidth - margins.left - margins.right;
   
-  // Titre de section
+  if (bordered) {
+    const sectionHeight = Object.keys(data).length * 20 + 40;
+    doc.rect(margins.left, y, contentWidth, sectionHeight)
+       .fillAndStroke(bgColor, colors.border);
+    y += 12;
+  }
+  
   doc.fontSize(fonts.subheading)
      .fillColor(colors.primary)
-     .text(title, margins.left, y);
+     .font('Helvetica-Bold')
+     .text(title, margins.left + 10, y);
   
-  y += 20;
+  y += 25;
   
-  // Données
   doc.fontSize(fonts.body)
-     .fillColor(colors.text);
+     .fillColor(colors.text)
+     .font('Helvetica');
   
-  Object.entries(data).forEach(([key, value]) => {
+  const entries = Object.entries(data);
+  const midPoint = Math.ceil(entries.length / 2);
+  const leftCol = margins.left + 15;
+  const rightCol = dimensions.pageWidth / 2 + 10;
+  
+  entries.forEach(([key, value], index) => {
+    const x = index < midPoint ? leftCol : rightCol;
+    const localY = index < midPoint ? y + (index * 18) : y + ((index - midPoint) * 18);
+    
     doc.fillColor(colors.textLight)
-       .text(`${key}:`, margins.left, y, { continued: true })
+       .font('Helvetica')
+       .text(`${key}:`, x, localY, { width: 100, continued: true })
        .fillColor(colors.text)
-       .text(` ${value}`);
-    y += 18;
+       .font('Helvetica-Bold')
+       .text(` ${value}`, { width: 150 });
   });
   
-  return y + 10;
+  return y + Math.max(midPoint, entries.length - midPoint) * 18 + 20;
 };
 
 /**
- * Dessiner une boîte de résumé
+ * BOÎTE DE RÉSUMÉ
  */
-const drawSummaryBox = (doc, items, x, y, width) => {
+const drawSummaryBox = (doc, items, x, y, width, options = {}) => {
   const { colors } = CLUB_INFO;
   const { fonts } = PDF_CONFIG;
+  const { title = 'Résumé', layout = 'horizontal' } = options;
   
-  const boxHeight = items.length * 25 + 20;
+  const boxHeight = layout === 'horizontal' ? 80 : items.length * 35 + 30;
   
-  // Fond
   doc.rect(x, y, width, boxHeight)
-     .fill('#F9F9F9')
-     .stroke(colors.light);
+     .fill(colors.bgLight);
   
-  let currentY = y + 10;
+  doc.rect(x, y, width, boxHeight)
+     .stroke(colors.primary);
   
-  items.forEach(item => {
-    doc.fontSize(fonts.body)
-       .fillColor(colors.textLight)
-       .text(item.label, x + 15, currentY, { continued: true, width: width - 100 })
-       .fillColor(item.color || colors.text)
-       .text(item.value, { align: 'right', width: 80 });
+  doc.rect(x, y, width, 5)
+     .fill(colors.primary);
+  
+  let currentY = y + 15;
+  
+  if (title) {
+    doc.fontSize(fonts.subheading)
+       .fillColor(colors.primary)
+       .font('Helvetica-Bold')
+       .text(title, x + 15, currentY, { width: width - 30 });
     currentY += 25;
-  });
+  }
+  
+  if (layout === 'horizontal') {
+    const itemWidth = (width - 40) / items.length;
+    let itemX = x + 20;
+    
+    items.forEach((item, index) => {
+      if (index > 0) {
+        doc.moveTo(itemX - 10, currentY - 5)
+           .lineTo(itemX - 10, currentY + 35)
+           .stroke(colors.border);
+      }
+      
+      doc.fontSize(fonts.small)
+         .fillColor(colors.textLight)
+         .font('Helvetica')
+         .text(item.label, itemX, currentY, { width: itemWidth - 10, align: 'center' });
+      
+      doc.fontSize(fonts.heading)
+         .fillColor(item.color || colors.text)
+         .font('Helvetica-Bold')
+         .text(item.value, itemX, currentY + 18, { width: itemWidth - 10, align: 'center' });
+      
+      itemX += itemWidth;
+    });
+  } else {
+    items.forEach((item, index) => {
+      doc.fontSize(fonts.body)
+         .fillColor(colors.textLight)
+         .font('Helvetica')
+         .text(item.label, x + 20, currentY, { width: width - 140, continued: true });
+      
+      doc.fillColor(item.color || colors.text)
+         .font('Helvetica-Bold')
+         .text(item.value, { align: 'right', width: 100 });
+      
+      currentY += 30;
+      
+      if (index < items.length - 1) {
+        doc.moveTo(x + 20, currentY - 5)
+           .lineTo(x + width - 20, currentY - 5)
+           .stroke(colors.border);
+      }
+    });
+  }
   
   return y + boxHeight + 20;
+};
+
+const truncateText = (text, maxLength) => {
+  if (!text) return '';
+  return text.length > maxLength ? text.substring(0, maxLength - 3) + '...' : text;
 };
 
 module.exports = {
@@ -402,5 +550,7 @@ module.exports = {
   drawFooter,
   drawTable,
   drawInfoSection,
-  drawSummaryBox
+  drawSummaryBox,
+  truncateText,
+  extractMemberName  
 };

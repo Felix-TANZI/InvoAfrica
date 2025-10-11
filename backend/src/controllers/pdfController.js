@@ -1,7 +1,7 @@
 /*   Projet : InvoAfrica
      @Auteur : NZIKO Felix Andre
      Email : tanzifelix@gmail.com
-     version : beta 2.0 - PDF Controller CORRIGÉ
+     version : beta 2.0 - PDF Controller COMPLET
 
      Instagram : felix_tanzi
      GitHub : Felix-TANZI
@@ -143,18 +143,16 @@ const exportTransactionsList = async (req, res) => {
       LIMIT 1000
     `, queryParams);
 
-    // ✅ CORRECTION : Créer nouvelle variable au lieu de réassigner
+    // ✅ Enrichir avec member_name
     const transactionsWithMembers = transactions.map(t => {
       let memberName = '';
       
-      // Pour cotisations/adhésions, extraire le nom après " - "
       if ((t.category_name === 'Cotisations' || t.category_name === 'Adhésions') && t.description) {
         const parts = t.description.split(' - ');
         if (parts.length > 1) {
           memberName = parts[1].trim();
         }
       } else if (t.contact_person) {
-        // Sinon utiliser contact_person
         memberName = t.contact_person.trim();
       }
       
@@ -175,7 +173,7 @@ const exportTransactionsList = async (req, res) => {
     const stats = statsResult[0] || {};
     stats.solde = (parseFloat(stats.montant_recettes) || 0) - (parseFloat(stats.montant_depenses) || 0);
     
-    // Générer le PDF avec les transactions enrichies
+    // Générer le PDF
     const filters = { status, type, category_id, date_from, date_to, search, amount_min, amount_max };
     const doc = await PDFService.generateTransactionList(transactionsWithMembers, filters, stats);
     const pdfBuffer = await PDFService.toBuffer(doc);
@@ -326,6 +324,252 @@ const generateMemberStatement = async (req, res) => {
 };
 
 /**
+ * ✅ NOUVEAU : Exporter la liste des Team Members
+ */
+const exportTeamMembers = async (req, res) => {
+  try {
+    const { status, contribution_status } = req.query;
+    
+    let whereConditions = ['tm.is_active = 1'];
+    let queryParams = [];
+    
+    if (status === 'active') {
+      whereConditions.push('tm.is_active = 1');
+    } else if (status === 'inactive') {
+      whereConditions.push('tm.is_active = 0');
+    }
+    
+    const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
+    
+    // Récupérer les team members avec statut cotisation du mois en cours
+    const currentDate = new Date();
+    const teamMembers = await executeQuery(`
+      SELECT 
+        tm.*,
+        COALESCE(tc.status, 'en_attente') as contribution_status,
+        tc.amount_paid
+      FROM team_members tm
+      LEFT JOIN team_contributions tc ON tm.id = tc.team_member_id 
+        AND MONTH(tc.due_date) = ? 
+        AND YEAR(tc.due_date) = ?
+      ${whereClause}
+      ORDER BY tm.name ASC
+    `, [currentDate.getMonth() + 1, currentDate.getFullYear()]);
+    
+    // Filtrer par statut de cotisation si demandé
+    let filteredMembers = teamMembers;
+    if (contribution_status === 'paid') {
+      filteredMembers = teamMembers.filter(m => m.contribution_status === 'paye');
+    } else if (contribution_status === 'unpaid') {
+      filteredMembers = teamMembers.filter(m => m.contribution_status !== 'paye');
+    } else if (contribution_status === 'advance') {
+      filteredMembers = teamMembers.filter(m => m.amount_paid > 0 && m.contribution_status !== 'paye');
+    }
+    
+    const filters = { status, contribution_status };
+    const doc = await PDFService.generateTeamMembersList(filteredMembers, filters);
+    const pdfBuffer = await PDFService.toBuffer(doc);
+    
+    const filename = `Team_Members_${new Date().toISOString().split('T')[0]}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    
+    res.send(pdfBuffer);
+    
+    console.log('✅ Liste Team Members exportée:', filteredMembers.length, 'membres');
+    
+  } catch (error) {
+    console.error('❌ Erreur export team members:', error);
+    return sendResponse(res, 500, 'Erreur lors de l\'export');
+  }
+};
+
+/**
+ * ✅ NOUVEAU : Exporter la liste des Adhérents
+ */
+const exportAdherents = async (req, res) => {
+  try {
+    const { status, subscription_status } = req.query;
+    
+    let whereConditions = [];
+    let queryParams = [];
+    
+    if (status === 'active') {
+      whereConditions.push('a.is_active = 1');
+    } else if (status === 'inactive') {
+      whereConditions.push('a.is_active = 0');
+    }
+    
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+    
+    // Récupérer les adhérents avec statut abonnement du mois en cours
+    const currentDate = new Date();
+    const adherents = await executeQuery(`
+      SELECT 
+        a.*,
+        COALESCE(ac.status, 'en_attente') as subscription_status,
+        ac.amount_paid
+      FROM adherents a
+      LEFT JOIN adherent_contributions ac ON a.id = ac.adherent_id 
+        AND MONTH(ac.due_date) = ? 
+        AND YEAR(ac.due_date) = ?
+      ${whereClause}
+      ORDER BY a.name ASC
+    `, [currentDate.getMonth() + 1, currentDate.getFullYear()]);
+    
+    // Filtrer par statut d'abonnement si demandé
+    let filteredAdherents = adherents;
+    if (subscription_status === 'paid') {
+      filteredAdherents = adherents.filter(a => a.subscription_status === 'paye');
+    } else if (subscription_status === 'unpaid') {
+      filteredAdherents = adherents.filter(a => a.subscription_status !== 'paye');
+    } else if (subscription_status === 'advance') {
+      filteredAdherents = adherents.filter(a => a.amount_paid > 0 && a.subscription_status !== 'paye');
+    }
+    
+    const filters = { status, subscription_status };
+    const doc = await PDFService.generateAdherentsList(filteredAdherents, filters);
+    const pdfBuffer = await PDFService.toBuffer(doc);
+    
+    const filename = `Adherents_${new Date().toISOString().split('T')[0]}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    
+    res.send(pdfBuffer);
+    
+    console.log('✅ Liste Adhérents exportée:', filteredAdherents.length, 'adhérents');
+    
+  } catch (error) {
+    console.error('❌ Erreur export adhérents:', error);
+    return sendResponse(res, 500, 'Erreur lors de l\'export');
+  }
+};
+
+/**
+ * ✅ NOUVEAU : Exporter les cotisations Team Members (avec filtre payé/non payé)
+ */
+const exportTeamContributions = async (req, res) => {
+  try {
+    const { year, month, paid } = req.query;
+    
+    const currentDate = new Date();
+    const targetYear = year ? parseInt(year) : currentDate.getFullYear();
+    const targetMonth = month ? parseInt(month) : currentDate.getMonth() + 1;
+    
+    let whereConditions = [
+      'YEAR(tc.due_date) = ?',
+      'MONTH(tc.due_date) = ?'
+    ];
+    let queryParams = [targetYear, targetMonth];
+    
+    const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
+    
+    const contributions = await executeQuery(`
+      SELECT 
+        tc.*,
+        tm.name as member_name,
+        tm.position,
+        tm.email
+      FROM team_contributions tc
+      INNER JOIN team_members tm ON tc.team_member_id = tm.id
+      ${whereClause}
+      ORDER BY tm.name ASC
+    `, queryParams);
+    
+    // Filtrer par statut de paiement si demandé
+    let filteredContributions = contributions;
+    if (paid === 'yes') {
+      filteredContributions = contributions.filter(c => c.status === 'paye');
+    } else if (paid === 'no') {
+      filteredContributions = contributions.filter(c => c.status !== 'paye');
+    }
+    
+    const filters = { year: targetYear, month: targetMonth, paid };
+    const doc = await PDFService.generateTeamContributionsList(filteredContributions, filters);
+    const pdfBuffer = await PDFService.toBuffer(doc);
+    
+    const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
+                        'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+    const filename = `Cotisations_Team_${monthNames[targetMonth - 1]}_${targetYear}.pdf`;
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    
+    res.send(pdfBuffer);
+    
+    console.log('✅ Cotisations Team exportées:', filteredContributions.length);
+    
+  } catch (error) {
+    console.error('❌ Erreur export cotisations team:', error);
+    return sendResponse(res, 500, 'Erreur lors de l\'export');
+  }
+};
+
+/**
+ * ✅ NOUVEAU : Exporter les abonnements Adhérents (avec filtre payé/non payé)
+ */
+const exportAdherentContributions = async (req, res) => {
+  try {
+    const { year, month, paid } = req.query;
+    
+    const currentDate = new Date();
+    const targetYear = year ? parseInt(year) : currentDate.getFullYear();
+    const targetMonth = month ? parseInt(month) : currentDate.getMonth() + 1;
+    
+    let whereConditions = [
+      'YEAR(ac.due_date) = ?',
+      'MONTH(ac.due_date) = ?'
+    ];
+    let queryParams = [targetYear, targetMonth];
+    
+    const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
+    
+    const contributions = await executeQuery(`
+      SELECT 
+        ac.*,
+        a.name as adherent_name,
+        a.email as adherent_email,
+        a.phone as adherent_phone
+      FROM adherent_contributions ac
+      INNER JOIN adherents a ON ac.adherent_id = a.id
+      ${whereClause}
+      ORDER BY a.name ASC
+    `, queryParams);
+    
+    // Filtrer par statut de paiement si demandé
+    let filteredContributions = contributions;
+    if (paid === 'yes') {
+      filteredContributions = contributions.filter(c => c.status === 'paye');
+    } else if (paid === 'no') {
+      filteredContributions = contributions.filter(c => c.status !== 'paye');
+    }
+    
+    const filters = { year: targetYear, month: targetMonth, paid };
+    const doc = await PDFService.generateAdherentContributionsList(filteredContributions, filters);
+    const pdfBuffer = await PDFService.toBuffer(doc);
+    
+    const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
+                        'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+    const filename = `Abonnements_Adherents_${monthNames[targetMonth - 1]}_${targetYear}.pdf`;
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+    
+    res.send(pdfBuffer);
+    
+    console.log('✅ Abonnements Adhérents exportés:', filteredContributions.length);
+    
+  } catch (error) {
+    console.error('❌ Erreur export abonnements adhérents:', error);
+    return sendResponse(res, 500, 'Erreur lors de l\'export');
+  }
+};
+
+/**
  * Vérifier l'état des assets PDF
  */
 const checkPdfAssets = async (req, res) => {
@@ -347,5 +591,9 @@ module.exports = {
   exportTransactionsList,
   generateFinancialReport,
   generateMemberStatement,
+  exportTeamMembers,
+  exportAdherents,
+  exportTeamContributions,
+  exportAdherentContributions,
   checkPdfAssets
 };

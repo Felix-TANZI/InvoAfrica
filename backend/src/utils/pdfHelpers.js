@@ -1,6 +1,6 @@
 /*   Projet : InvoAfrica
      @Auteur : NZIKO Felix Andre
-     version : beta 2.0 - PDF Helpers  */
+     version : beta 2.0 - PDF Helpers CORRIGÉ */
 
 const QRCode = require('qrcode');
 const fs = require('fs');
@@ -60,7 +60,7 @@ const generateQRCode = async (data) => {
 };
 
 /**
- *  Extraire le nom du membre
+ * ✅ AMÉLIORATION : Extraire le nom du membre (gestion intelligente)
  */
 const extractMemberName = (transaction) => {
   // Priorité 1 : contact_person
@@ -76,7 +76,51 @@ const extractMemberName = (transaction) => {
     }
   }
   
+  // Priorité 3 : member_name si disponible
+  if (transaction.member_name) {
+    return transaction.member_name.trim();
+  }
+  
   return '-';
+};
+
+/**
+ * ✅ AMÉLIORATION : Tronquer intelligemment (avec retour à la ligne)
+ */
+const truncateText = (text, maxLength, addEllipsis = true) => {
+  if (!text) return '';
+  const str = String(text);
+  if (str.length <= maxLength) return str;
+  
+  if (addEllipsis) {
+    return str.substring(0, maxLength - 3) + '...';
+  }
+  return str.substring(0, maxLength);
+};
+
+/**
+ * ✅ NOUVEAU : Wrapper de texte automatique (retour à la ligne)
+ */
+const wrapText = (doc, text, x, y, maxWidth, lineHeight = 12) => {
+  const words = String(text).split(' ');
+  let line = '';
+  let currentY = y;
+  
+  words.forEach((word, index) => {
+    const testLine = line + word + ' ';
+    const testWidth = doc.widthOfString(testLine);
+    
+    if (testWidth > maxWidth && index > 0) {
+      doc.text(line, x, currentY);
+      line = word + ' ';
+      currentY += lineHeight;
+    } else {
+      line = testLine;
+    }
+  });
+  
+  doc.text(line, x, currentY);
+  return currentY + lineHeight;
 };
 
 /**
@@ -192,7 +236,7 @@ const drawHeader = (doc, title, subtitle, logoPath) => {
 };
 
 /**
- * PIED DE PAGE AMÉLIORÉ
+ * ✅ CORRECTION : PIED DE PAGE AVEC SIGNATURE (SANS SUPERPOSITION)
  */
 const drawFooter = (doc, pageNumber, totalPages, footerText, signaturePath = null) => {
   const { colors } = CLUB_INFO;
@@ -200,11 +244,11 @@ const drawFooter = (doc, pageNumber, totalPages, footerText, signaturePath = nul
   
   const footerY = dimensions.pageHeight - margins.bottom - 10;
   
-  // Signature (uniquement sur page 1)
+  // ✅ SIGNATURE : Positionnée AVANT le pied de page (plus haut)
   if (signaturePath && pageNumber === 1 && fs.existsSync(signaturePath)) {
     try {
       const signX = dimensions.pageWidth - margins.right - dimensions.signatureWidth - 20;
-      const signY = footerY - dimensions.signatureHeight - 80;
+      const signY = footerY - dimensions.signatureHeight - 120; // ✅ Plus haut pour éviter superposition
       
       doc.fontSize(fonts.small)
          .fillColor(colors.textLight)
@@ -289,7 +333,7 @@ const drawFooter = (doc, pageNumber, totalPages, footerText, signaturePath = nul
 };
 
 /**
- * TABLEAU AMÉLIORÉ
+ * ✅ AMÉLIORATION : TABLEAU AVEC RETOUR À LA LIGNE AUTOMATIQUE POUR TOUTES LES COLONNES
  */
 const drawTable = (doc, headers, rows, startY, options = {}) => {
   const { colors } = CLUB_INFO;
@@ -339,7 +383,22 @@ const drawTable = (doc, headers, rows, startY, options = {}) => {
   
   rows.forEach((row, rowIndex) => {
     x = margins.left;
+    
+    // ✅ CORRECTION : Calculer hauteur exacte pour CHAQUE cellule avec heightOfString
     let maxHeight = table.rowHeight;
+    row.forEach((cell, cellIndex) => {
+      const cellText = cell === null || cell === undefined ? '' : String(cell);
+      
+      // ✅ Utiliser heightOfString pour obtenir la hauteur réelle du texte avec retour à la ligne
+      const textHeight = doc.heightOfString(cellText, {
+        width: colWidths[cellIndex] - padding * 2,
+        lineBreak: true,
+        align: alignRight.includes(cellIndex) ? 'right' : 'left'
+      });
+      
+      const cellHeight = textHeight + padding * 2;
+      maxHeight = Math.max(maxHeight, cellHeight);
+    });
     
     // Nouvelle page si nécessaire
     if (y + maxHeight > dimensions.pageHeight - margins.bottom - 100) {
@@ -380,20 +439,29 @@ const drawTable = (doc, headers, rows, startY, options = {}) => {
     doc.rect(margins.left, y, tableWidth, maxHeight)
        .stroke(borderColor);
     
-    // Contenu cellules
+    // ✅ CORRECTION : Contenu cellules avec retour à la ligne automatique
     doc.fillColor(colors.text);
     row.forEach((cell, cellIndex) => {
       const align = alignRight.includes(cellIndex) ? 'right' : 'left';
       const cellText = cell === null || cell === undefined ? '' : String(cell);
       
-      doc.text(cellText, x + padding, y + padding, {
+      // ✅ Centrer verticalement le texte dans la cellule
+      const textHeight = doc.heightOfString(cellText, {
+        width: colWidths[cellIndex] - padding * 2,
+        lineBreak: true,
+        align: align
+      });
+      
+      const verticalOffset = Math.max(0, (maxHeight - textHeight) / 2);
+      
+      doc.text(cellText, x + padding, y + verticalOffset, {
         width: colWidths[cellIndex] - padding * 2,
         align: align,
         lineBreak: true,
-        height: maxHeight - padding * 2,
         ellipsis: false
       });
       
+      // Bordure verticale entre colonnes
       if (cellIndex < row.length - 1) {
         doc.moveTo(x + colWidths[cellIndex], y)
            .lineTo(x + colWidths[cellIndex], y + maxHeight)
@@ -537,11 +605,6 @@ const drawSummaryBox = (doc, items, x, y, width, options = {}) => {
   return y + boxHeight + 20;
 };
 
-const truncateText = (text, maxLength) => {
-  if (!text) return '';
-  return text.length > maxLength ? text.substring(0, maxLength - 3) + '...' : text;
-};
-
 module.exports = {
   formatAmount,
   formatDate,
@@ -552,5 +615,6 @@ module.exports = {
   drawInfoSection,
   drawSummaryBox,
   truncateText,
-  extractMemberName  
+  wrapText,
+  extractMemberName
 };

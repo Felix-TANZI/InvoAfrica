@@ -1,221 +1,300 @@
 /*   Projet : InvoAfrica
      @Auteur : NZIKO Felix Andre
-     Email : tanzifelix@gmail.com
-     version : beta 1.0 - PDF Export Buttons
-
-     Instagram : felix_tanzi
-     GitHub : Felix-TANZI
-     Linkedin : Felix TANZI */
+     version : beta 2.0 - Composant bouton PDF réutilisable */
 
 import React, { useState } from 'react';
-import { Download, FileText, TrendingUp, Clock, CheckCircle } from 'lucide-react';
-import pdfAPI from '../../services/pdfAPI';
+import { Download, FileText, Users, CreditCard } from 'lucide-react';
+import { pdfAPI } from '../services/api';
 import toast from 'react-hot-toast';
-import './PdfExportButtons.css';
 
-const PdfExportButtons = ({ 
-  variant = 'transaction-list', // 'transaction-list', 'receipt', 'financial-report', 'member-statement'
-  transactionId = null,
-  memberId = null,
-  filters = {},
-  reportOptions = {}
+/**
+ * Composant bouton PDF réutilisable
+ * 
+ * @param {string} variant - Type d'export: 'team-members' | 'adherents' | 'team-contributions' | 'adherent-contributions'
+ * @param {object} filters - Filtres à appliquer
+ * @param {string} label - Texte du bouton (optionnel)
+ * @param {string} className - Classes CSS supplémentaires (optionnel)
+ */
+const PdfExportButton = ({ 
+  variant, 
+  filters = {}, 
+  label, 
+  className = '',
+  options = {}
 }) => {
   const [loading, setLoading] = useState(false);
   
-  /**
-   * Télécharger un reçu de transaction
-   */
-  const handleDownloadReceipt = async () => {
-    if (!transactionId) {
-      toast.error('ID de transaction manquant');
-      return;
-    }
-    
-    setLoading(true);
-    const loadingToast = toast.loading('Génération du reçu en cours...');
-    
-    try {
-      await pdfAPI.downloadReceipt(transactionId);
-      toast.success('Reçu téléchargé avec succès !', { id: loadingToast });
-    } catch (error) {
-      toast.error(error.message || 'Erreur lors du téléchargement', { id: loadingToast });
-    } finally {
-      setLoading(false);
+  const getButtonConfig = () => {
+    switch (variant) {
+      case 'team-members':
+        return {
+          icon: Users,
+          defaultLabel: 'Exporter PDF',
+          color: '#3b82f6',
+          handler: () => pdfAPI.exportTeamMembers(filters)
+        };
+      
+      case 'adherents':
+        return {
+          icon: Users,
+          defaultLabel: 'Exporter PDF',
+          color: '#10b981',
+          handler: () => pdfAPI.exportAdherents(filters)
+        };
+      
+      case 'team-contributions':
+        return {
+          icon: CreditCard,
+          defaultLabel: 'Exporter Cotisations',
+          color: '#8b5cf6',
+          handler: () => pdfAPI.exportTeamContributions(options)
+        };
+      
+      case 'adherent-contributions':
+        return {
+          icon: FileText,
+          defaultLabel: 'Exporter Abonnements',
+          color: '#f59e0b',
+          handler: () => pdfAPI.exportAdherentContributions(options)
+        };
+      
+      default:
+        return {
+          icon: Download,
+          defaultLabel: 'Télécharger PDF',
+          color: '#6b7280',
+          handler: () => Promise.reject(new Error('Variant non supporté'))
+        };
     }
   };
   
-  /**
-   * Exporter la liste des transactions
-   */
-  const handleExportList = async () => {
+  const config = getButtonConfig();
+  const Icon = config.icon;
+  const buttonLabel = label || config.defaultLabel;
+  
+  const handleExport = async () => {
     setLoading(true);
     const loadingToast = toast.loading('Génération du PDF en cours...');
     
     try {
-      await pdfAPI.exportTransactionsList(filters);
-      toast.success('Export réussi !', { id: loadingToast });
+      await config.handler();
+      toast.success('PDF téléchargé avec succès !', { id: loadingToast });
     } catch (error) {
+      console.error('❌ Erreur export PDF:', error);
       toast.error(error.message || 'Erreur lors de l\'export', { id: loadingToast });
     } finally {
       setLoading(false);
     }
   };
   
-  /**
-   * Télécharger un rapport financier
-   */
-  const handleDownloadReport = async () => {
-    setLoading(true);
-    const loadingToast = toast.loading('Génération du rapport en cours...');
-    
-    try {
-      await pdfAPI.downloadFinancialReport(reportOptions);
-      toast.success('Rapport téléchargé avec succès !', { id: loadingToast });
-    } catch (error) {
-      toast.error(error.message || 'Erreur lors du téléchargement', { id: loadingToast });
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  /**
-   * Télécharger le relevé d'un membre
-   */
-  const handleDownloadStatement = async () => {
-    if (!memberId) {
-      toast.error('ID de membre manquant');
-      return;
-    }
-    
-    setLoading(true);
-    const loadingToast = toast.loading('Génération du relevé en cours...');
-    
-    try {
-      await pdfAPI.downloadMemberStatement(memberId);
-      toast.success('Relevé téléchargé avec succès !', { id: loadingToast });
-    } catch (error) {
-      toast.error(error.message || 'Erreur lors du téléchargement', { id: loadingToast });
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  // Rendu selon le variant
-  switch (variant) {
-    case 'receipt':
-      return (
-        <button
-          className="pdf-btn receipt-btn"
-          onClick={handleDownloadReceipt}
-          disabled={loading || !transactionId}
-          title="Télécharger le reçu"
-        >
-          <FileText size={16} />
-          <span>{loading ? 'Génération...' : 'Reçu PDF'}</span>
-        </button>
-      );
-    
-    case 'transaction-list':
-      return (
-        <button
-          className="pdf-btn export-btn"
-          onClick={handleExportList}
-          disabled={loading}
-          title="Exporter en PDF"
-        >
-          <Download size={16} />
-          <span>{loading ? 'Export en cours...' : 'Exporter PDF'}</span>
-        </button>
-      );
-    
-    case 'financial-report':
-      return (
-        <button
-          className="pdf-btn report-btn"
-          onClick={handleDownloadReport}
-          disabled={loading}
-          title="Télécharger le rapport"
-        >
-          <TrendingUp size={16} />
-          <span>{loading ? 'Génération...' : 'Rapport PDF'}</span>
-        </button>
-      );
-    
-    case 'member-statement':
-      return (
-        <button
-          className="pdf-btn statement-btn"
-          onClick={handleDownloadStatement}
-          disabled={loading || !memberId}
-          title="Télécharger le relevé"
-        >
-          <FileText size={16} />
-          <span>{loading ? 'Génération...' : 'Relevé PDF'}</span>
-        </button>
-      );
-    
-    default:
-      return null;
-  }
+  return (
+    <button
+      onClick={handleExport}
+      disabled={loading}
+      className={`pdf-export-btn ${className}`}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '10px 18px',
+        background: loading ? '#9ca3af' : config.color,
+        color: 'white',
+        border: 'none',
+        borderRadius: '8px',
+        fontSize: '14px',
+        fontWeight: '600',
+        cursor: loading ? 'not-allowed' : 'pointer',
+        transition: 'all 0.2s ease',
+        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+        opacity: loading ? 0.7 : 1
+      }}
+      onMouseEnter={(e) => {
+        if (!loading) {
+          e.currentTarget.style.transform = 'translateY(-2px)';
+          e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.15)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
+      }}
+    >
+      <Icon size={16} />
+      <span>{loading ? 'Génération...' : buttonLabel}</span>
+    </button>
+  );
 };
 
 /**
- * Composant de groupe de boutons d'export pour la page Transactions
+ * Composant dropdown pour filtrer avant export (payé/non payé)
  */
-export const TransactionPdfButtons = ({ transactionId, status, filters }) => {
-  return (
-    <div className="pdf-buttons-group">
-      {/* Bouton export liste (toujours visible) */}
-      <PdfExportButtons 
-        variant="transaction-list" 
-        filters={filters}
-      />
+export const PdfExportDropdown = ({ variant, currentMonth, currentYear }) => {
+  const [showMenu, setShowMenu] = useState(false);
+  const [loading, setLoading] = useState(false);
+  
+  const isContributions = variant === 'team-contributions' || variant === 'adherent-contributions';
+  
+  const handleExport = async (paid = null) => {
+    setLoading(true);
+    setShowMenu(false);
+    
+    const loadingToast = toast.loading('Génération du PDF en cours...');
+    
+    try {
+      const options = {
+        year: currentYear,
+        month: currentMonth
+      };
       
-      {/* Bouton reçu (uniquement si transaction validée) */}
-      {transactionId && status === 'validee' && (
-        <PdfExportButtons 
-          variant="receipt" 
-          transactionId={transactionId}
-        />
+      if (paid !== null) {
+        options.paid = paid;
+      }
+      
+      if (variant === 'team-contributions') {
+        await pdfAPI.exportTeamContributions(options);
+      } else if (variant === 'adherent-contributions') {
+        await pdfAPI.exportAdherentContributions(options);
+      }
+      
+      toast.success('PDF téléchargé avec succès !', { id: loadingToast });
+    } catch (error) {
+      console.error('❌ Erreur export PDF:', error);
+      toast.error(error.message || 'Erreur lors de l\'export', { id: loadingToast });
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  if (!isContributions) {
+    return <PdfExportButton variant={variant} options={{ year: currentYear, month: currentMonth }} />;
+  }
+  
+  return (
+    <div style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        onClick={() => setShowMenu(!showMenu)}
+        disabled={loading}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '10px 18px',
+          background: loading ? '#9ca3af' : '#8b5cf6',
+          color: 'white',
+          border: 'none',
+          borderRadius: '8px',
+          fontSize: '14px',
+          fontWeight: '600',
+          cursor: loading ? 'not-allowed' : 'pointer',
+          transition: 'all 0.2s ease',
+          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+        }}
+      >
+        <Download size={16} />
+        <span>{loading ? 'Génération...' : 'Exporter PDF'}</span>
+        <svg 
+          width="12" 
+          height="12" 
+          viewBox="0 0 12 12" 
+          fill="currentColor"
+          style={{ marginLeft: '4px' }}
+        >
+          <path d="M6 8L2 4h8L6 8z"/>
+        </svg>
+      </button>
+      
+      {showMenu && !loading && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 8px)',
+            right: 0,
+            background: 'white',
+            borderRadius: '12px',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15)',
+            border: '1px solid #e5e7eb',
+            minWidth: '200px',
+            zIndex: 1000,
+            overflow: 'hidden'
+          }}
+          onMouseLeave={() => setShowMenu(false)}
+        >
+          <button
+            onClick={() => handleExport(null)}
+            style={{
+              width: '100%',
+              padding: '12px 16px',
+              border: 'none',
+              background: 'none',
+              textAlign: 'left',
+              fontSize: '14px',
+              cursor: 'pointer',
+              transition: 'background 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              color: '#374151'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+          >
+            <FileText size={16} />
+            <span>Tous</span>
+          </button>
+          
+          <button
+            onClick={() => handleExport('yes')}
+            style={{
+              width: '100%',
+              padding: '12px 16px',
+              border: 'none',
+              background: 'none',
+              textAlign: 'left',
+              fontSize: '14px',
+              cursor: 'pointer',
+              transition: 'background 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              color: '#10b981'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#f0fdf4'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M13.5 3.5L6 11l-3.5-3.5L1 9l5 5 9-9-1.5-1.5z"/>
+            </svg>
+            <span>Payées uniquement</span>
+          </button>
+          
+          <button
+            onClick={() => handleExport('no')}
+            style={{
+              width: '100%',
+              padding: '12px 16px',
+              border: 'none',
+              background: 'none',
+              textAlign: 'left',
+              fontSize: '14px',
+              cursor: 'pointer',
+              transition: 'background 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              color: '#ef4444'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#fef2f2'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            <span>Non payées uniquement</span>
+          </button>
+        </div>
       )}
     </div>
   );
 };
 
-/**
- * Composant avec icône de statut pour les actions rapides
- */
-export const QuickPdfAction = ({ transactionId, status }) => {
-  const [loading, setLoading] = useState(false);
-  
-  const handleQuickDownload = async () => {
-    setLoading(true);
-    try {
-      await pdfAPI.downloadReceipt(transactionId);
-      toast.success('Reçu téléchargé !');
-    } catch (error) {
-      toast.error('Erreur téléchargement');
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  if (status !== 'validee') return null;
-  
-  return (
-    <button
-      className="quick-pdf-btn"
-      onClick={handleQuickDownload}
-      disabled={loading}
-      title="Télécharger le reçu"
-    >
-      {loading ? (
-        <Clock size={14} className="spinning" />
-      ) : (
-        <Download size={14} />
-      )}
-    </button>
-  );
-};
-
-export default PdfExportButtons;
+export default PdfExportButton;

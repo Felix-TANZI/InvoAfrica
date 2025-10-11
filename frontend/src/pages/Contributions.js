@@ -29,6 +29,7 @@ import { contributionAPI } from '../services/api';
 import { usePermissions } from '../hooks/useAuth';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ContributionPaymentForm from '../components/forms/ContributionPaymentForm';
+import { PdfExportDropdown } from '../components/common/PdfExportButton';
 import toast from 'react-hot-toast';
 import './Contributions.css';
 
@@ -278,6 +279,13 @@ const Contributions = () => {
                 Générer
               </button>
             )}
+
+            {/* ✅ NOUVEAU : Bouton PDF avec dropdown (Tous/Payés/Non payés) */}
+    <PdfExportDropdown 
+      variant={activeTab === 'team' ? 'team-contributions' : 'adherent-contributions'}
+      currentMonth={currentMonth}
+      currentYear={currentYear}
+    />
             
             <div className="period-selector modern">
               <select 

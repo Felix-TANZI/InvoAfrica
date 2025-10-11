@@ -1,6 +1,6 @@
 /*   Projet : InvoAfrica
      @Auteur : NZIKO Felix Andre
-     version : beta 2.0 - PDF Templates  */
+     version : beta 2.0 - PDF Templates COMPLETS */
 
 const { 
   CLUB_INFO, 
@@ -28,9 +28,7 @@ const {
 } = require('../utils/pdfHelpers');
 
 /**
- 
- * 1️⃣ TEMPLATE: REÇU DE TRANSACTION 
- 
+ * ✅ CORRIGÉ : REÇU DE TRANSACTION (tout sur 1 page, pas de superposition)
  */
 async function generateReceiptPDF(doc, transaction) {
   const { colors } = CLUB_INFO;
@@ -46,32 +44,32 @@ async function generateReceiptPDF(doc, transaction) {
     ASSETS_PATH.logo
   );
   
-  y += 5; //  Réduction espace
+  y += 5;
   
   // NUMÉRO DE RÉFÉRENCE
   const refBoxY = y;
   const refBoxWidth = dimensions.pageWidth - margins.left - margins.right;
   
-  doc.rect(margins.left, refBoxY, refBoxWidth, 45) //  Réduction hauteur 50→45
+  doc.rect(margins.left, refBoxY, refBoxWidth, 40)
      .fillAndStroke(colors.bgBlueLight, colors.primary);
   
   doc.fontSize(fonts.small)
      .fillColor(colors.textLight)
      .font('Helvetica')
-     .text('Numéro de Référence', margins.left, refBoxY + 10, {
+     .text('Numéro de Référence', margins.left, refBoxY + 8, {
        width: refBoxWidth,
        align: 'center'
      });
   
-  doc.fontSize(20) //  Réduction taille 22→20
+  doc.fontSize(18)
      .fillColor(colors.primary)
      .font('Helvetica-Bold')
-     .text(transaction.reference, margins.left, refBoxY + 23, {
+     .text(transaction.reference, margins.left, refBoxY + 20, {
        width: refBoxWidth,
        align: 'center'
      });
   
-  y = refBoxY + 55; //  Réduction espace 65→55
+  y = refBoxY + 50;
   
   // SECTION PRINCIPALE - Informations en colonnes
   const leftColX = margins.left + 10;
@@ -84,9 +82,9 @@ async function generateReceiptPDF(doc, transaction) {
   doc.fontSize(fonts.subheading)
      .fillColor(colors.primary)
      .font('Helvetica-Bold')
-     .text('Détails de la Transaction', leftColX, leftY); // 
+     .text('Détails de la Transaction', leftColX, leftY);
   
-  leftY += 20; //  Réduction espace 25→20
+  leftY += 18;
   
   const leftInfo = [
     { label: 'Date', value: formatDate(transaction.transaction_date, 'medium') },
@@ -102,33 +100,33 @@ async function generateReceiptPDF(doc, transaction) {
   leftInfo.forEach(item => {
     doc.fillColor(colors.textLight)
        .font('Helvetica')
-       .text(`${item.label}:`, leftColX, leftY, { width: 120, continued: false });
+       .text(`${item.label}:`, leftColX, leftY, { width: 110, continued: false });
     
     doc.fillColor(colors.text)
        .font('Helvetica-Bold')
-       .text(item.value, leftColX + 125, leftY, { width: colWidth - 125 });
+       .text(item.value, leftColX + 115, leftY, { width: colWidth - 115 });
     
-    leftY += 18; //  Réduction espace 22→18
+    leftY += 16;
   });
   
   // Contact
   if (transaction.contact_person) {
-    leftY += 3;
+    leftY += 2;
     doc.fillColor(colors.textLight)
        .font('Helvetica')
-       .text('Contact:', leftColX, leftY, { width: 120 });
+       .text('Contact:', leftColX, leftY, { width: 110 });
     
     doc.fillColor(colors.text)
        .font('Helvetica-Bold')
-       .text(transaction.contact_person, leftColX + 125, leftY, { width: colWidth - 125 });
+       .text(transaction.contact_person, leftColX + 115, leftY, { width: colWidth - 115 });
     
-    leftY += 18;
+    leftY += 16;
   }
   
   // COLONNE DROITE
   let rightY = y;
   
-  const amountBoxHeight = 85; //
+  const amountBoxHeight = 75;
   const amountBoxWidth = colWidth + 20;
   
   doc.rect(rightColX - 10, rightY, amountBoxWidth, amountBoxHeight)
@@ -138,16 +136,16 @@ async function generateReceiptPDF(doc, transaction) {
   doc.rect(rightColX - 10, rightY, amountBoxWidth, 4)
      .fill(typeColor);
   
-  rightY += 12;
+  rightY += 10;
   
   doc.fontSize(fonts.small)
      .fillColor(colors.textLight)
      .font('Helvetica')
      .text('MONTANT', rightColX, rightY, { width: amountBoxWidth - 20, align: 'center' });
   
-  rightY += 18;
+  rightY += 16;
   
-  doc.fontSize(24) // 
+  doc.fontSize(22)
      .fillColor(typeColor)
      .font('Helvetica-Bold')
      .text(formatAmount(transaction.amount), rightColX, rightY, {
@@ -155,7 +153,7 @@ async function generateReceiptPDF(doc, transaction) {
        align: 'center'
      });
   
-  rightY += 35;
+  rightY += 30;
   
   // Statut
   const statusInfo = getStatusLabel(transaction.status);
@@ -165,35 +163,35 @@ async function generateReceiptPDF(doc, transaction) {
      .font('Helvetica')
      .text('Statut', rightColX, rightY, { width: amountBoxWidth - 20, align: 'center' });
   
-  rightY += 13;
+  rightY += 11;
   
-  const badgeWidth = 100;
+  const badgeWidth = 95;
   const badgeX = rightColX + (amountBoxWidth - badgeWidth) / 2 - 10;
   
-  doc.roundedRect(badgeX, rightY - 3, badgeWidth, 20, 3) //  Réduction 22→20
+  doc.roundedRect(badgeX, rightY - 3, badgeWidth, 18, 3)
      .fill(statusInfo.color);
   
   doc.fontSize(fonts.body)
      .fillColor('#FFFFFF')
      .font('Helvetica-Bold')
-     .text(`${statusInfo.icon} ${statusInfo.text}`, badgeX, rightY - 1, {
+     .text(`${statusInfo.icon} ${statusInfo.text}`, badgeX, rightY - 2, {
        width: badgeWidth,
        align: 'center'
      });
   
   // DESCRIPTION
-  y = Math.max(leftY, rightY + amountBoxHeight) + 10; //  Réduction 15→10
+  y = Math.max(leftY, rightY + amountBoxHeight) + 8;
   
   doc.fontSize(fonts.subheading)
      .fillColor(colors.primary)
      .font('Helvetica-Bold')
-     .text('Description', margins.left + 10, y); 
+     .text('Description', margins.left + 10, y);
   
-  y += 15;
+  y += 14;
   
   const descBoxWidth = dimensions.pageWidth - margins.left - margins.right - 20;
   const descText = transaction.description || 'Aucune description fournie';
-  const descHeight = Math.max(40, Math.ceil(descText.length / 90) * 18); //  Optimisé
+  const descHeight = Math.max(35, Math.ceil(descText.length / 90) * 16);
   
   doc.rect(margins.left + 10, y, descBoxWidth, descHeight)
      .fillAndStroke(colors.bgLight, colors.border);
@@ -201,12 +199,12 @@ async function generateReceiptPDF(doc, transaction) {
   doc.fontSize(fonts.body)
      .fillColor(colors.text)
      .font('Helvetica')
-     .text(descText, margins.left + 20, y + 8, {
-       width: descBoxWidth - 20,
+     .text(descText, margins.left + 18, y + 7, {
+       width: descBoxWidth - 16,
        align: 'justify'
      });
   
-  y += descHeight + 12; //  Réduction 20→12
+  y += descHeight + 10;
   
   // NOTES
   if (transaction.notes) {
@@ -216,38 +214,47 @@ async function generateReceiptPDF(doc, transaction) {
        .text(`Note: ${transaction.notes}`, margins.left + 10, y, {
          width: dimensions.pageWidth - margins.left - margins.right - 20
        });
-    y += 20;
+    y += 18;
   }
   
   // VALIDATION INFO
   if (transaction.status === 'validee' && transaction.validated_by_name) {
-    y += 5;
+    y += 4;
     
-    const validBoxWidth = 280; //  Réduction 300→280
+    const validBoxWidth = 270;
     const validBoxX = margins.left + 10;
     
-    doc.rect(validBoxX, y, validBoxWidth, 45) //  Réduction 50→45
+    doc.rect(validBoxX, y, validBoxWidth, 40)
        .fillAndStroke('#d1fae5', '#10b981');
     
     doc.fontSize(fonts.small)
        .fillColor('#065f46')
        .font('Helvetica')
-       .text('Transaction validée', validBoxX + 10, y + 8); 
+       .text('Transaction validée', validBoxX + 10, y + 7);
     
     doc.fontSize(fonts.body)
-       .text(`Par: ${transaction.validated_by_name}`, validBoxX + 10, y + 22);
+       .text(`Par: ${transaction.validated_by_name}`, validBoxX + 10, y + 19);
     
     if (transaction.validated_at) {
-      doc.text(`Le: ${formatDate(transaction.validated_at, 'medium')}`, validBoxX + 10, y + 34);
+      doc.text(`Le: ${formatDate(transaction.validated_at, 'medium')}`, validBoxX + 10, y + 30);
     }
     
-    y += 55;
+    y += 48;
   }
   
-  // QR CODE - Optimisé pour tenir sur 1 page
-  const qrSize = 85; //  Réduction 90→85
-  const qrX = dimensions.pageWidth - margins.right - qrSize - 20;
-  const qrY = y;
+  // ✅ CORRECTION : QR CODE - Positionné intelligemment pour éviter superposition
+  // Calculer l'espace disponible avant le pied de page (qui commence à pageHeight - bottom - 140)
+  const footerStartY = dimensions.pageHeight - margins.bottom - 140;
+  const qrSize = 80;
+  const qrSpaceNeeded = qrSize + 30; // QR + texte en dessous
+  
+  // Si pas assez d'espace, on positionne le QR plus haut
+  let qrY = y;
+  if (qrY + qrSpaceNeeded > footerStartY) {
+    qrY = footerStartY - qrSpaceNeeded - 10; // 10px de marge
+  }
+  
+  const qrX = margins.left + 20;
   
   const qrData = `${process.env.FRONTEND_URL || 'https://gi-enspy.com'}/verify/${transaction.reference}`;
   const qrCode = await generateQRCode(qrData);
@@ -264,20 +271,18 @@ async function generateReceiptPDF(doc, transaction) {
     doc.fontSize(fonts.tiny)
        .fillColor(colors.textLight)
        .font('Helvetica')
-       .text(PDF_TEXTS.receipt.qrText, qrX - 10, qrY + qrSize + 6, {
-         width: qrSize + 20,
+       .text(PDF_TEXTS.receipt.qrText, qrX - 8, qrY + qrSize + 5, {
+         width: qrSize + 16,
          align: 'center'
        });
   }
   
-  // PIED DE PAGE avec signature
+  // ✅ PIED DE PAGE avec signature (la signature sera positionnée plus haut automatiquement)
   drawFooter(doc, 1, 1, PDF_TEXTS.receipt.footer, ASSETS_PATH.signature);
 }
 
 /**
- 
- * 2️⃣ TEMPLATE: LISTE DES TRANSACTIONS - AVEC SIGNATURE
- 
+ * ✅ CORRIGÉ : LISTE DES TRANSACTIONS (avec colonne Description + Membre, signature)
  */
 async function generateTransactionListPDF(doc, transactions, filters, statistics) {
   const { colors } = CLUB_INFO;
@@ -333,7 +338,7 @@ async function generateTransactionListPDF(doc, transactions, filters, statistics
       margins.left, 
       y, 
       dimensions.pageWidth - margins.left - margins.right,
-      { title: 'Résumé Financier', layout: 'horizontal' } 
+      { title: 'Résumé Financier', layout: 'horizontal' }
     );
   }
   
@@ -353,26 +358,25 @@ async function generateTransactionListPDF(doc, transactions, filters, statistics
        .text(`Filtres: ${activeFilters.join(' • ')}`, margins.left, y, { 
          width: dimensions.pageWidth - margins.left - margins.right
        });
-    y += 25;
+    y += 22;
   }
   
-  //  TABLEAU AVEC COLONNE "MEMBRE/ADHÉRENT"
+  // ✅ TABLEAU AVEC COLONNES : Réf, Date, Membre, Description, Catégorie, Montant, Statut
   if (transactions.length > 0) {
-    const headers = ['Réf.', 'Date', 'Membre', 'Catégorie', 'Type', 'Montant', 'Statut'];
+    const headers = ['Réf.', 'Date', 'Membre', 'Description', 'Catégorie', 'Montant', 'Statut'];
     
-    //  Largeurs ajustées pour ne pas dépasser
-    const columnWidths = [55, 60, 95, 75, 50, 75, 55]; // Total = 465
+    // ✅ Largeurs ajustées pour inclure Description + Membre
+    const columnWidths = [45, 50, 70, 100, 65, 65, 50]; // Total = 445
     
     const rows = transactions.map(t => {
-      //  Extraire le nom du membre
       const memberName = extractMemberName(t);
       
       return [
         t.reference,
         formatDate(t.transaction_date, 'short'),
-        truncateText(memberName, 20),
-        truncateText(t.category_name || 'N/A', 16),
-        getTypeLabel(t.type).text,
+        truncateText(memberName, 15),
+        truncateText(t.description || '', 22),
+        truncateText(t.category_name || 'N/A', 14),
         formatAmount(t.amount),
         getStatusLabel(t.status).text
       ];
@@ -393,7 +397,7 @@ async function generateTransactionListPDF(doc, transactions, filters, statistics
        });
   }
   
-  //  PIED DE PAGE AVEC SIGNATURE sur dernière page
+  // ✅ PIED DE PAGE AVEC SIGNATURE sur dernière page
   const range = doc.bufferedPageRange();
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(i);
@@ -404,9 +408,7 @@ async function generateTransactionListPDF(doc, transactions, filters, statistics
 }
 
 /**
- 
- *  TEMPLATE: RAPPORT FINANCIER 
- 
+ * TEMPLATE: RAPPORT FINANCIER (avec signature)
  */
 async function generateFinancialReportPDF(doc, data) {
   const { colors } = CLUB_INFO;
@@ -491,14 +493,12 @@ async function generateFinancialReportPDF(doc, data) {
     doc.fontSize(fonts.subheading)
        .fillColor(colors.primary)
        .font('Helvetica-Bold')
-       .text('Répartition par Catégorie', margins.left, y); 
+       .text('Répartition par Catégorie', margins.left, y);
     
     y += 25;
     
     const headers = ['Catégorie', 'Type', 'Nb Trans.', 'Montant Total', '% du Total'];
-    
-    //  Largeurs ajustées
-    const columnWidths = [165, 75, 75, 90, 70]; // Total = 475
+    const columnWidths = [165, 75, 75, 90, 70];
     
     const grandTotal = data.byCategory.reduce((sum, cat) => 
       sum + parseFloat(cat.total_amount || 0), 0
@@ -529,7 +529,7 @@ async function generateFinancialReportPDF(doc, data) {
   doc.fontSize(fonts.subheading)
      .fillColor(colors.primary)
      .font('Helvetica-Bold')
-     .text(PDF_TEXTS.financialReport.commentSection, margins.left, y); 
+     .text(PDF_TEXTS.financialReport.commentSection, margins.left, y);
   
   y += 20;
   
@@ -546,7 +546,7 @@ async function generateFinancialReportPDF(doc, data) {
        align: 'left'
      });
   
-  // PIED DE PAGE avec signature
+  // ✅ PIED DE PAGE avec signature
   const range = doc.bufferedPageRange();
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(i);
@@ -555,9 +555,7 @@ async function generateFinancialReportPDF(doc, data) {
 }
 
 /**
- 
- * 4️⃣ TEMPLATE: RELEVÉ MEMBRE
- 
+ * TEMPLATE: RELEVÉ MEMBRE (avec signature)
  */
 async function generateMemberStatementPDF(doc, member, contributions) {
   const { colors } = CLUB_INFO;
@@ -620,7 +618,7 @@ async function generateMemberStatementPDF(doc, member, contributions) {
     margins.left, 
     y, 
     dimensions.pageWidth - margins.left - margins.right,
-    { title: 'Résumé des Cotisations', layout: 'horizontal' } 
+    { title: 'Résumé des Cotisations', layout: 'horizontal' }
   );
   
   // TABLEAU COTISATIONS
@@ -628,7 +626,7 @@ async function generateMemberStatementPDF(doc, member, contributions) {
     doc.fontSize(fonts.subheading)
        .fillColor(colors.primary)
        .font('Helvetica-Bold')
-       .text('Historique Détaillé', margins.left, y); 
+       .text('Historique Détaillé', margins.left, y);
     
     y += 20;
     
@@ -636,7 +634,7 @@ async function generateMemberStatementPDF(doc, member, contributions) {
     const columnWidths = [100, 140, 90, 80, 115];
     
     const rows = contributions.map(c => {
-      const status = c.status === 'paid' ? 'Payée' : 'En attente'; 
+      const status = c.status === 'paid' ? 'Payée' : 'En attente';
       
       return [
         formatDate(c.due_date, 'short'),
@@ -661,11 +659,379 @@ async function generateMemberStatementPDF(doc, member, contributions) {
        });
   }
   
-  // PIED DE PAGE
+  // ✅ PIED DE PAGE avec signature
   const range = doc.bufferedPageRange();
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(i);
-    drawFooter(doc, i + 1, range.count, PDF_TEXTS.memberStatement.footer);
+    drawFooter(doc, i + 1, range.count, PDF_TEXTS.memberStatement.footer, ASSETS_PATH.signature);
+  }
+}
+
+/**
+ * ✅ NOUVEAU : LISTE TEAM MEMBERS (avec signature)
+ */
+async function generateTeamMembersPDF(doc, teamMembers, filters) {
+  const { colors } = CLUB_INFO;
+  const { margins, fonts, dimensions } = PDF_CONFIG;
+  
+  doc.addPage();
+  
+  let subtitle = `Export réalisé le ${formatDate(new Date(), 'medium')}`;
+  
+  // EN-TÊTE
+  let y = drawHeader(
+    doc,
+    'LISTE DES TEAM MEMBERS',
+    subtitle,
+    ASSETS_PATH.logo
+  );
+  
+  // STATISTIQUES
+  const activeMembers = teamMembers.filter(m => m.is_active).length;
+  const paidMembers = teamMembers.filter(m => m.contribution_status === 'paye').length;
+  
+  const statsItems = [
+    { label: 'Total Members', value: String(teamMembers.length), color: colors.text },
+    { label: 'Actifs', value: String(activeMembers), color: colors.success },
+    { label: 'Cotisations Payées', value: String(paidMembers), color: colors.info }
+  ];
+  
+  y = drawSummaryBox(
+    doc, 
+    statsItems, 
+    margins.left, 
+    y, 
+    dimensions.pageWidth - margins.left - margins.right,
+    { title: 'Résumé', layout: 'horizontal' }
+  );
+  
+  // FILTRES
+  const activeFilters = [];
+  if (filters.status) activeFilters.push(`Statut: ${filters.status}`);
+  if (filters.contribution_status) activeFilters.push(`Cotisation: ${filters.contribution_status}`);
+  
+  if (activeFilters.length > 0) {
+    doc.fontSize(fonts.small)
+       .fillColor(colors.textLight)
+       .font('Helvetica-Oblique')
+       .text(`Filtres: ${activeFilters.join(' • ')}`, margins.left, y, { 
+         width: dimensions.pageWidth - margins.left - margins.right
+       });
+    y += 22;
+  }
+  
+  // TABLEAU
+  if (teamMembers.length > 0) {
+    const headers = ['ID', 'Nom', 'Position', 'Email', 'Cotisation', 'Statut'];
+    const columnWidths = [30, 110, 95, 120, 70, 50];
+    
+    const rows = teamMembers.map(m => {
+      const contributionStatus = m.contribution_status === 'paye' ? '✓ Payée' : 
+                                  m.contribution_status === 'avance' ? 'Avance' : 
+                                  '✗ En attente';
+      
+      return [
+        String(m.id),
+        truncateText(m.name, 24),
+        truncateText(m.position || '-', 20),
+        truncateText(m.email || '-', 26),
+        contributionStatus,
+        m.is_active ? 'Actif' : 'Inactif'
+      ];
+    });
+    
+    y = drawTable(doc, headers, rows, y, {
+      columnWidths,
+      fontSize: fonts.tiny
+    });
+  }
+  
+  // ✅ PIED DE PAGE AVEC SIGNATURE
+  const range = doc.bufferedPageRange();
+  for (let i = 0; i < range.count; i++) {
+    doc.switchToPage(i);
+    const signature = (i === range.count - 1) ? ASSETS_PATH.signature : null;
+    drawFooter(doc, i + 1, range.count, 'Document officiel du Club Génie Informatique', signature);
+  }
+}
+
+/**
+ * ✅ NOUVEAU : LISTE ADHÉRENTS (avec signature)
+ */
+async function generateAdherentsPDF(doc, adherents, filters) {
+  const { colors } = CLUB_INFO;
+  const { margins, fonts, dimensions } = PDF_CONFIG;
+  
+  doc.addPage();
+  
+  let subtitle = `Export réalisé le ${formatDate(new Date(), 'medium')}`;
+  
+  // EN-TÊTE
+  let y = drawHeader(
+    doc,
+    'LISTE DES ADHÉRENTS',
+    subtitle,
+    ASSETS_PATH.logo
+  );
+  
+  // STATISTIQUES
+  const activeAdherents = adherents.filter(a => a.is_active).length;
+  const paidAdherents = adherents.filter(a => a.subscription_status === 'paye').length;
+  
+  const statsItems = [
+    { label: 'Total Adhérents', value: String(adherents.length), color: colors.text },
+    { label: 'Actifs', value: String(activeAdherents), color: colors.success },
+    { label: 'Abonnements Payés', value: String(paidAdherents), color: colors.info }
+  ];
+  
+  y = drawSummaryBox(
+    doc, 
+    statsItems, 
+    margins.left, 
+    y, 
+    dimensions.pageWidth - margins.left - margins.right,
+    { title: 'Résumé', layout: 'horizontal' }
+  );
+  
+  // FILTRES
+  const activeFilters = [];
+  if (filters.status) activeFilters.push(`Statut: ${filters.status}`);
+  if (filters.subscription_status) activeFilters.push(`Abonnement: ${filters.subscription_status}`);
+  
+  if (activeFilters.length > 0) {
+    doc.fontSize(fonts.small)
+       .fillColor(colors.textLight)
+       .font('Helvetica-Oblique')
+       .text(`Filtres: ${activeFilters.join(' • ')}`, margins.left, y, { 
+         width: dimensions.pageWidth - margins.left - margins.right
+       });
+    y += 22;
+  }
+  
+  // TABLEAU
+  if (adherents.length > 0) {
+    const headers = ['ID', 'Nom', 'Email', 'Téléphone', 'Abonnement', 'Statut'];
+    const columnWidths = [30, 120, 120, 80, 75, 50];
+    
+    const rows = adherents.map(a => {
+      const subscriptionStatus = a.subscription_status === 'paye' ? '✓ Payé' : 
+                                   a.subscription_status === 'avance' ? 'Avance' : 
+                                   '✗ En attente';
+      
+      return [
+        String(a.id),
+        truncateText(a.name, 26),
+        truncateText(a.email || '-', 26),
+        truncateText(a.phone || '-', 18),
+        subscriptionStatus,
+        a.is_active ? 'Actif' : 'Inactif'
+      ];
+    });
+    
+    y = drawTable(doc, headers, rows, y, {
+      columnWidths,
+      fontSize: fonts.tiny
+    });
+  }
+  
+  // ✅ PIED DE PAGE AVEC SIGNATURE
+  const range = doc.bufferedPageRange();
+  for (let i = 0; i < range.count; i++) {
+    doc.switchToPage(i);
+    const signature = (i === range.count - 1) ? ASSETS_PATH.signature : null;
+    drawFooter(doc, i + 1, range.count, 'Document officiel du Club Génie Informatique', signature);
+  }
+}
+
+/**
+ * ✅ NOUVEAU : COTISATIONS TEAM MEMBERS (avec signature + filtres payé/non payé)
+ */
+async function generateTeamContributionsPDF(doc, contributions, filters) {
+  const { colors } = CLUB_INFO;
+  const { margins, fonts, dimensions } = PDF_CONFIG;
+  
+  doc.addPage();
+  
+  const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
+                      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+  const period = filters.month && filters.year ? 
+    `${monthNames[filters.month - 1]} ${filters.year}` : 
+    `Année ${filters.year || new Date().getFullYear()}`;
+  
+  // EN-TÊTE
+  let y = drawHeader(
+    doc,
+    'COTISATIONS TEAM MEMBERS',
+    `Période: ${period}`,
+    ASSETS_PATH.logo
+  );
+  
+  // STATISTIQUES
+  const paidCount = contributions.filter(c => c.status === 'paye').length;
+  const totalPaid = contributions.reduce((sum, c) => sum + (c.amount_paid || 0), 0);
+  const totalExpected = contributions.reduce((sum, c) => sum + (c.amount || 0), 0);
+  
+  const statsItems = [
+    { label: 'Total Membres', value: String(contributions.length), color: colors.text },
+    { label: 'Payés', value: String(paidCount), color: colors.success },
+    { label: 'Collecté', value: formatAmount(totalPaid), color: colors.info },
+    { label: 'Attendu', value: formatAmount(totalExpected), color: colors.warning }
+  ];
+  
+  y = drawSummaryBox(
+    doc, 
+    statsItems, 
+    margins.left, 
+    y, 
+    dimensions.pageWidth - margins.left - margins.right,
+    { title: 'Résumé', layout: 'horizontal' }
+  );
+  
+  // FILTRES
+  const activeFilters = [];
+  if (filters.paid === 'yes') activeFilters.push('Filtre: Cotisations payées');
+  if (filters.paid === 'no') activeFilters.push('Filtre: Cotisations non payées');
+  
+  if (activeFilters.length > 0) {
+    doc.fontSize(fonts.small)
+       .fillColor(colors.textLight)
+       .font('Helvetica-Oblique')
+       .text(`${activeFilters.join(' • ')}`, margins.left, y, { 
+         width: dimensions.pageWidth - margins.left - margins.right
+       });
+    y += 22;
+  }
+  
+  // TABLEAU
+  if (contributions.length > 0) {
+    const headers = ['Membre', 'Position', 'Montant', 'Payé', 'Reste', 'Statut'];
+    const columnWidths = [130, 100, 70, 70, 70, 60];
+    
+    const rows = contributions.map(c => {
+      const remaining = (c.amount || 0) - (c.amount_paid || 0);
+      const status = c.status === 'paye' ? '✓ Payée' : 
+                     c.amount_paid > 0 ? 'Avance' : 
+                     '✗ En attente';
+      
+      return [
+        truncateText(c.member_name || '-', 28),
+        truncateText(c.position || '-', 22),
+        formatAmount(c.amount),
+        formatAmount(c.amount_paid || 0),
+        formatAmount(remaining),
+        status
+      ];
+    });
+    
+    y = drawTable(doc, headers, rows, y, {
+      columnWidths,
+      fontSize: fonts.tiny,
+      alignRight: [2, 3, 4]
+    });
+  }
+  
+  // ✅ PIED DE PAGE AVEC SIGNATURE
+  const range = doc.bufferedPageRange();
+  for (let i = 0; i < range.count; i++) {
+    doc.switchToPage(i);
+    const signature = (i === range.count - 1) ? ASSETS_PATH.signature : null;
+    drawFooter(doc, i + 1, range.count, 'Document officiel du Club Génie Informatique', signature);
+  }
+}
+
+/**
+ * ✅ NOUVEAU : ABONNEMENTS ADHÉRENTS (avec signature + filtres payé/non payé)
+ */
+async function generateAdherentContributionsPDF(doc, contributions, filters) {
+  const { colors } = CLUB_INFO;
+  const { margins, fonts, dimensions } = PDF_CONFIG;
+  
+  doc.addPage();
+  
+  const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
+                      'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+  const period = filters.month && filters.year ? 
+    `${monthNames[filters.month - 1]} ${filters.year}` : 
+    `Année ${filters.year || new Date().getFullYear()}`;
+  
+  // EN-TÊTE
+  let y = drawHeader(
+    doc,
+    'ABONNEMENTS ADHÉRENTS',
+    `Période: ${period}`,
+    ASSETS_PATH.logo
+  );
+  
+  // STATISTIQUES
+  const paidCount = contributions.filter(c => c.status === 'paye').length;
+  const totalPaid = contributions.reduce((sum, c) => sum + (c.amount_paid || 0), 0);
+  const totalExpected = contributions.reduce((sum, c) => sum + (c.amount || 0), 0);
+  
+  const statsItems = [
+    { label: 'Total Adhérents', value: String(contributions.length), color: colors.text },
+    { label: 'Payés', value: String(paidCount), color: colors.success },
+    { label: 'Collecté', value: formatAmount(totalPaid), color: colors.info },
+    { label: 'Attendu', value: formatAmount(totalExpected), color: colors.warning }
+  ];
+  
+  y = drawSummaryBox(
+    doc, 
+    statsItems, 
+    margins.left, 
+    y, 
+    dimensions.pageWidth - margins.left - margins.right,
+    { title: 'Résumé', layout: 'horizontal' }
+  );
+  
+  // FILTRES
+  const activeFilters = [];
+  if (filters.paid === 'yes') activeFilters.push('Filtre: Abonnements payés');
+  if (filters.paid === 'no') activeFilters.push('Filtre: Abonnements non payés');
+  
+  if (activeFilters.length > 0) {
+    doc.fontSize(fonts.small)
+       .fillColor(colors.textLight)
+       .font('Helvetica-Oblique')
+       .text(`${activeFilters.join(' • ')}`, margins.left, y, { 
+         width: dimensions.pageWidth - margins.left - margins.right
+       });
+    y += 22;
+  }
+  
+  // TABLEAU
+  if (contributions.length > 0) {
+    const headers = ['Adhérent', 'Email', 'Montant', 'Payé', 'Reste', 'Statut'];
+    const columnWidths = [130, 130, 70, 70, 60, 60];
+    
+    const rows = contributions.map(c => {
+      const remaining = (c.amount || 0) - (c.amount_paid || 0);
+      const status = c.status === 'paye' ? '✓ Payé' : 
+                     c.amount_paid > 0 ? 'Avance' : 
+                     '✗ En attente';
+      
+      return [
+        truncateText(c.adherent_name || '-', 28),
+        truncateText(c.adherent_email || '-', 28),
+        formatAmount(c.amount),
+        formatAmount(c.amount_paid || 0),
+        formatAmount(remaining),
+        status
+      ];
+    });
+    
+    y = drawTable(doc, headers, rows, y, {
+      columnWidths,
+      fontSize: fonts.tiny,
+      alignRight: [2, 3, 4]
+    });
+  }
+  
+  // ✅ PIED DE PAGE AVEC SIGNATURE
+  const range = doc.bufferedPageRange();
+  for (let i = 0; i < range.count; i++) {
+    doc.switchToPage(i);
+    const signature = (i === range.count - 1) ? ASSETS_PATH.signature : null;
+    drawFooter(doc, i + 1, range.count, 'Document officiel du Club Génie Informatique', signature);
   }
 }
 
@@ -673,5 +1039,9 @@ module.exports = {
   generateReceiptPDF,
   generateTransactionListPDF,
   generateFinancialReportPDF,
-  generateMemberStatementPDF
+  generateMemberStatementPDF,
+  generateTeamMembersPDF,
+  generateAdherentsPDF,
+  generateTeamContributionsPDF,
+  generateAdherentContributionsPDF
 };

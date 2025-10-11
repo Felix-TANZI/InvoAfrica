@@ -1,7 +1,7 @@
 /*   Projet : InvoAfrica
      @Auteur : NZIKO Felix Andre
      Email : tanzifelix@gmail.com
-     version : beta 1.0 - PDF API
+     version : beta 2.0 - PDF API COMPLET
 
      Instagram : felix_tanzi
      GitHub : Felix-TANZI
@@ -20,7 +20,6 @@ const pdfAPI = {
     try {
       const response = await pdfApiClient.get(`/pdf/transactions/${transactionId}/receipt`);
       
-      // Créer un lien de téléchargement
       const url = window.URL.createObjectURL(response.data);
       const link = document.createElement('a');
       link.href = url;
@@ -42,7 +41,6 @@ const pdfAPI = {
    */
   exportTransactionsList: async (filters = {}) => {
     try {
-      // Construire les paramètres de requête
       const params = new URLSearchParams();
       
       if (filters.status) params.append('status', filters.status);
@@ -56,7 +54,6 @@ const pdfAPI = {
       
       const response = await pdfApiClient.get(`/pdf/transactions/export?${params.toString()}`);
       
-      // Télécharger le fichier
       const url = window.URL.createObjectURL(response.data);
       const link = document.createElement('a');
       link.href = url;
@@ -81,8 +78,6 @@ const pdfAPI = {
    */
   downloadFinancialReport: async (options = {}) => {
     try {
-      console.log('📄 Génération rapport avec options:', options);
-      
       const params = new URLSearchParams();
       
       if (options.year) params.append('year', options.year);
@@ -92,9 +87,6 @@ const pdfAPI = {
       
       const response = await pdfApiClient.get(`/pdf/report/financial?${params.toString()}`);
       
-      console.log('✅ Réponse reçue, taille:', response.data.size);
-      
-      // Télécharger le fichier
       const url = window.URL.createObjectURL(response.data);
       const link = document.createElement('a');
       link.href = url;
@@ -113,8 +105,6 @@ const pdfAPI = {
       link.remove();
       window.URL.revokeObjectURL(url);
       
-      console.log('✅ Téléchargement réussi:', filename);
-      
       return { success: true };
     } catch (error) {
       console.error('❌ Erreur rapport financier:', error);
@@ -129,7 +119,6 @@ const pdfAPI = {
     try {
       const response = await pdfApiClient.get(`/pdf/members/${memberId}/statement`);
       
-      // Télécharger le fichier
       const url = window.URL.createObjectURL(response.data);
       const link = document.createElement('a');
       link.href = url;
@@ -145,14 +134,150 @@ const pdfAPI = {
       throw error.response?.data || { message: 'Erreur lors du téléchargement' };
     }
   },
+
+  /**
+   * ✅ NOUVEAU : Exporter la liste des Team Members
+   */
+  exportTeamMembers: async (filters = {}) => {
+    try {
+      const params = new URLSearchParams();
+      
+      if (filters.status) params.append('status', filters.status);
+      if (filters.contribution_status) params.append('contribution_status', filters.contribution_status);
+      
+      const response = await pdfApiClient.get(`/pdf/team-members/export?${params.toString()}`);
+      
+      const url = window.URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const today = new Date().toISOString().split('T')[0];
+      link.setAttribute('download', `Team_Members_${today}.pdf`);
+      
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Erreur export team members:', error);
+      throw error.response?.data || { message: 'Erreur lors de l\'export' };
+    }
+  },
+
+  /**
+   * ✅ NOUVEAU : Exporter la liste des Adhérents
+   */
+  exportAdherents: async (filters = {}) => {
+    try {
+      const params = new URLSearchParams();
+      
+      if (filters.status) params.append('status', filters.status);
+      if (filters.subscription_status) params.append('subscription_status', filters.subscription_status);
+      
+      const response = await pdfApiClient.get(`/pdf/adherents/export?${params.toString()}`);
+      
+      const url = window.URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const today = new Date().toISOString().split('T')[0];
+      link.setAttribute('download', `Adherents_${today}.pdf`);
+      
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Erreur export adhérents:', error);
+      throw error.response?.data || { message: 'Erreur lors de l\'export' };
+    }
+  },
+
+  /**
+   * ✅ NOUVEAU : Exporter les cotisations Team Members
+   */
+  exportTeamContributions: async (options = {}) => {
+    try {
+      const currentDate = new Date();
+      const params = new URLSearchParams();
+      
+      params.append('year', options.year || currentDate.getFullYear());
+      params.append('month', options.month || (currentDate.getMonth() + 1));
+      
+      if (options.paid) params.append('paid', options.paid); // 'yes' ou 'no'
+      
+      const response = await pdfApiClient.get(`/pdf/contributions/team/export?${params.toString()}`);
+      
+      const url = window.URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const monthNames = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 
+                          'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre'];
+      const month = options.month || (currentDate.getMonth() + 1);
+      const year = options.year || currentDate.getFullYear();
+      
+      link.setAttribute('download', `Cotisations_Team_${monthNames[month - 1]}_${year}.pdf`);
+      
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Erreur export cotisations team:', error);
+      throw error.response?.data || { message: 'Erreur lors de l\'export' };
+    }
+  },
+
+  /**
+   * ✅ NOUVEAU : Exporter les abonnements Adhérents
+   */
+  exportAdherentContributions: async (options = {}) => {
+    try {
+      const currentDate = new Date();
+      const params = new URLSearchParams();
+      
+      params.append('year', options.year || currentDate.getFullYear());
+      params.append('month', options.month || (currentDate.getMonth() + 1));
+      
+      if (options.paid) params.append('paid', options.paid); // 'yes' ou 'no'
+      
+      const response = await pdfApiClient.get(`/pdf/contributions/adherents/export?${params.toString()}`);
+      
+      const url = window.URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const monthNames = ['Janvier', 'Fevrier', 'Mars', 'Avril', 'Mai', 'Juin', 
+                          'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre'];
+      const month = options.month || (currentDate.getMonth() + 1);
+      const year = options.year || currentDate.getFullYear();
+      
+      link.setAttribute('download', `Abonnements_Adherents_${monthNames[month - 1]}_${year}.pdf`);
+      
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Erreur export abonnements adhérents:', error);
+      throw error.response?.data || { message: 'Erreur lors de l\'export' };
+    }
+  },
   
   /**
    * Vérifier l'état des assets PDF
-   * Note: Cette requête retourne du JSON, pas un blob
    */
   checkAssets: async () => {
     try {
-      // Pour cette requête, on utilise l'API normale car elle retourne du JSON
       const { default: api } = await import('./api');
       const response = await api.get('/pdf/check-assets');
       return response.data;

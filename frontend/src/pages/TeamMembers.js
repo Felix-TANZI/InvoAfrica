@@ -32,6 +32,7 @@ import { memberAPI, contributionAPI } from '../services/api';
 import { usePermissions } from '../hooks/useAuth';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import TeamMemberForm from '../components/forms/TeamMemberForm';
+import PdfExportButton from '../components/common/PdfExportButton';
 import toast from 'react-hot-toast';
 import './TeamMembers.css';
 
@@ -221,6 +222,15 @@ const TeamMembers = () => {
               Nouveau Membre
             </button>
           )}
+
+          {/* ✅ NOUVEAU : Bouton PDF */}
+    <PdfExportButton 
+      variant="team-members"
+      filters={{ 
+        status: 'active', // ou selon vos filtres
+        contribution_status: 'paid' // optionnel
+      }}
+    />
         </div>
       </div>
 

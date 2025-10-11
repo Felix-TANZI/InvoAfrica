@@ -1,211 +1,153 @@
 /*   Projet : InvoAfrica
      @Auteur : NZIKO Felix Andre
-     Email : tanzifelix@gmail.com
-     version : beta 1.0 - PDF Service
-
-     Instagram : felix_tanzi
-     GitHub : Felix-TANZI
-     Linkedin : Felix TANZI */
+     version : beta 2.0 - PDF Service COMPLET */
 
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
-const path = require('path');
-const { 
-  ASSETS_PATH, 
-  PDF_CONFIG, 
-  PDF_TYPES,
-  PDF_TEXTS 
-} = require('../config/pdfConfig');
-const {
-  drawHeader,
-  drawFooter,
-  generateQRCode
-} = require('../utils/pdfHelpers');
+const { ASSETS_PATH } = require('../config/pdfConfig');
 
-// Import des templates
 const {
   generateReceiptPDF,
   generateTransactionListPDF,
   generateFinancialReportPDF,
-  generateMemberStatementPDF
+  generateMemberStatementPDF,
+  generateTeamMembersPDF,
+  generateAdherentsPDF,
+  generateTeamContributionsPDF,
+  generateAdherentContributionsPDF
 } = require('./pdfTemplates');
 
 /**
- * Classe principale de génération PDF
+ * Service pour gérer la génération de PDF
  */
 class PDFService {
-  
   /**
    * Créer un nouveau document PDF
    */
-  static createDocument(options = {}) {
-    const defaultOptions = {
-      ...PDF_CONFIG.defaultOptions,
+  static createDocument() {
+    return new PDFDocument({
+      size: 'A4',
+      margin: 50,
+      bufferPages: true,
+      autoFirstPage: false,
+      compress: true,
       info: {
-        Title: options.title || 'Document Club GI',
+        Title: 'Document Club GI',
         Author: 'Club Génie Informatique',
-        Subject: options.subject || 'Document financier',
+        Subject: 'Document généré automatiquement',
         Creator: 'InvoAfrica System'
       }
-    };
-    
-    return new PDFDocument(defaultOptions);
+    });
   }
-  
+
+  /**
+   * Convertir un document PDF en buffer
+   */
+  static toBuffer(doc) {
+    return new Promise((resolve, reject) => {
+      try {
+        const chunks = [];
+        
+        doc.on('data', (chunk) => chunks.push(chunk));
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('error', reject);
+        
+        doc.end();
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
   /**
    * Générer un reçu de transaction
    */
   static async generateReceipt(transaction) {
-    try {
-      console.log('📄 Génération du reçu pour transaction:', transaction.reference);
-      
-      const doc = this.createDocument({
-        title: `Reçu - ${transaction.reference}`,
-        subject: 'Reçu de transaction'
-      });
-      
-      // Générer le contenu
-      await generateReceiptPDF(doc, transaction);
-      
-      return doc;
-    } catch (error) {
-      console.error('❌ Erreur génération reçu:', error);
-      throw new Error(`Erreur lors de la génération du reçu: ${error.message}`);
-    }
+    const doc = this.createDocument();
+    await generateReceiptPDF(doc, transaction);
+    return doc;
   }
-  
+
   /**
    * Générer une liste de transactions
    */
-  static async generateTransactionList(transactions, filters = {}, statistics = {}) {
-    try {
-      console.log('📄 Génération liste de', transactions.length, 'transactions');
-      
-      const doc = this.createDocument({
-        title: 'Liste des Transactions',
-        subject: 'Export des transactions'
-      });
-      
-      // Générer le contenu
-      await generateTransactionListPDF(doc, transactions, filters, statistics);
-      
-      return doc;
-    } catch (error) {
-      console.error('❌ Erreur génération liste:', error);
-      throw new Error(`Erreur lors de la génération de la liste: ${error.message}`);
-    }
+  static async generateTransactionList(transactions, filters, statistics) {
+    const doc = this.createDocument();
+    await generateTransactionListPDF(doc, transactions, filters, statistics);
+    return doc;
   }
-  
+
   /**
    * Générer un rapport financier
    */
   static async generateFinancialReport(data) {
-    try {
-      console.log('📄 Génération rapport financier pour période:', data.period);
-      
-      const doc = this.createDocument({
-        title: `Rapport Financier - ${data.period}`,
-        subject: 'Rapport financier périodique'
-      });
-      
-      // Générer le contenu
-      await generateFinancialReportPDF(doc, data);
-      
-      return doc;
-    } catch (error) {
-      console.error('❌ Erreur génération rapport:', error);
-      throw new Error(`Erreur lors de la génération du rapport: ${error.message}`);
-    }
+    const doc = this.createDocument();
+    await generateFinancialReportPDF(doc, data);
+    return doc;
   }
-  
+
   /**
-   * Générer un relevé membre
+   * Générer un relevé de membre
    */
   static async generateMemberStatement(member, contributions) {
-    try {
-      console.log('📄 Génération relevé pour membre:', member.name);
-      
-      const doc = this.createDocument({
-        title: `Relevé - ${member.name}`,
-        subject: 'Relevé de cotisations'
-      });
-      
-      // Générer le contenu
-      await generateMemberStatementPDF(doc, member, contributions);
-      
-      return doc;
-    } catch (error) {
-      console.error('❌ Erreur génération relevé membre:', error);
-      throw new Error(`Erreur lors de la génération du relevé: ${error.message}`);
-    }
+    const doc = this.createDocument();
+    await generateMemberStatementPDF(doc, member, contributions);
+    return doc;
   }
-  
+
   /**
-   * Sauvegarder le PDF dans un fichier
+   * ✅ NOUVEAU : Générer la liste des Team Members
    */
-  static async saveToFile(doc, filename) {
-    return new Promise((resolve, reject) => {
-      const outputPath = path.join(__dirname, '../uploads/pdfs', filename);
-      
-      // Créer le dossier s'il n'existe pas
-      const dir = path.dirname(outputPath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-      
-      const stream = fs.createWriteStream(outputPath);
-      
-      doc.pipe(stream);
-      doc.end();
-      
-      stream.on('finish', () => {
-        console.log('✅ PDF sauvegardé:', outputPath);
-        resolve(outputPath);
-      });
-      
-      stream.on('error', (error) => {
-        console.error('❌ Erreur sauvegarde PDF:', error);
-        reject(error);
-      });
-    });
+  static async generateTeamMembersList(teamMembers, filters) {
+    const doc = this.createDocument();
+    await generateTeamMembersPDF(doc, teamMembers, filters);
+    return doc;
   }
-  
+
   /**
-   * Convertir le PDF en buffer (pour envoi HTTP)
+   * ✅ NOUVEAU : Générer la liste des Adhérents
    */
-  static async toBuffer(doc) {
-    return new Promise((resolve, reject) => {
-      const buffers = [];
-      
-      doc.on('data', buffers.push.bind(buffers));
-      doc.on('end', () => {
-        const pdfBuffer = Buffer.concat(buffers);
-        resolve(pdfBuffer);
-      });
-      doc.on('error', reject);
-      
-      doc.end();
-    });
+  static async generateAdherentsList(adherents, filters) {
+    const doc = this.createDocument();
+    await generateAdherentsPDF(doc, adherents, filters);
+    return doc;
   }
-  
+
   /**
-   * Vérifier que les assets existent
+   * ✅ NOUVEAU : Générer la liste des cotisations Team
+   */
+  static async generateTeamContributionsList(contributions, filters) {
+    const doc = this.createDocument();
+    await generateTeamContributionsPDF(doc, contributions, filters);
+    return doc;
+  }
+
+  /**
+   * ✅ NOUVEAU : Générer la liste des abonnements Adhérents
+   */
+  static async generateAdherentContributionsList(contributions, filters) {
+    const doc = this.createDocument();
+    await generateAdherentContributionsPDF(doc, contributions, filters);
+    return doc;
+  }
+
+  /**
+   * Vérifier la disponibilité des assets
    */
   static checkAssets() {
-    const assets = {
-      logo: fs.existsSync(ASSETS_PATH.logo),
-      signature: fs.existsSync(ASSETS_PATH.signature)
+    const logoExists = fs.existsSync(ASSETS_PATH.logo);
+    const signatureExists = fs.existsSync(ASSETS_PATH.signature);
+    
+    console.log('🔍 Vérification des assets PDF:');
+    console.log(`  Logo: ${logoExists ? '✅' : '❌'} (${ASSETS_PATH.logo})`);
+    console.log(`  Signature: ${signatureExists ? '✅' : '❌'} (${ASSETS_PATH.signature})`);
+    
+    return {
+      logo: logoExists,
+      signature: signatureExists,
+      logoPath: ASSETS_PATH.logo,
+      signaturePath: ASSETS_PATH.signature
     };
-    
-    if (!assets.logo) {
-      console.warn('⚠️  Logo non trouvé:', ASSETS_PATH.logo);
-    }
-    
-    if (!assets.signature) {
-      console.warn('⚠️  Signature non trouvée:', ASSETS_PATH.signature);
-    }
-    
-    return assets;
   }
 }
 

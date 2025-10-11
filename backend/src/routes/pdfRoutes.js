@@ -9,10 +9,10 @@
 const express = require('express');
 const router = express.Router();
 const pdfController = require('../controllers/pdfController');
-const { authenticate } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth'); // ✅ CORRIGÉ
 
 // ✅ Toutes les routes PDF nécessitent l'authentification
-router.use(authenticate);
+router.use(authenticateToken); // ✅ CORRIGÉ
 
 /**
  * @route   GET /api/pdf/transactions/:id/receipt

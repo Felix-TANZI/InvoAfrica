@@ -4,7 +4,7 @@
 
 import React, { useState } from 'react';
 import { Download, FileText, Users, CreditCard } from 'lucide-react';
-import { pdfAPI } from '../services/api';
+import pdfAPI from '../../services/pdfAPI'; // ✅ CORRIGÉ
 import toast from 'react-hot-toast';
 
 /**
@@ -294,6 +294,82 @@ export const PdfExportDropdown = ({ variant, currentMonth, currentYear }) => {
         </div>
       )}
     </div>
+  );
+};
+
+/**
+ * ✅ Composant pour action rapide PDF (dans tableau)
+ */
+export const QuickPdfAction = ({ transactionId, size = 28 }) => {
+  const [loading, setLoading] = useState(false);
+  
+  const handleDownload = async (e) => {
+    e.stopPropagation();
+    
+    setLoading(true);
+    const loadingToast = toast.loading('Génération du reçu...');
+    
+    try {
+      await pdfAPI.downloadReceipt(transactionId);
+      toast.success('Reçu téléchargé !', { id: loadingToast });
+    } catch (error) {
+      console.error('❌ Erreur téléchargement reçu:', error);
+      toast.error('Erreur lors du téléchargement', { id: loadingToast });
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  return (
+    <button
+      onClick={handleDownload}
+      disabled={loading}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: `${size}px`,
+        height: `${size}px`,
+        padding: 0,
+        border: 'none',
+        borderRadius: '6px',
+        background: loading ? '#9ca3af' : '#FF8C00',
+        color: 'white',
+        cursor: loading ? 'not-allowed' : 'pointer',
+        transition: 'all 0.2s ease',
+        opacity: loading ? 0.7 : 1
+      }}
+      title="Télécharger le reçu"
+      onMouseEnter={(e) => {
+        if (!loading) {
+          e.currentTarget.style.background = '#FFA500';
+          e.currentTarget.style.transform = 'scale(1.1)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!loading) {
+          e.currentTarget.style.background = '#FF8C00';
+          e.currentTarget.style.transform = 'scale(1)';
+        }
+      }}
+    >
+      {loading ? (
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          style={{ animation: 'spin 1s linear infinite' }}
+        >
+          <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+          <path d="M12 2a10 10 0 0 1 10 10" />
+        </svg>
+      ) : (
+        <Download size={14} />
+      )}
+    </button>
   );
 };
 

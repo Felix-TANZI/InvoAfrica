@@ -29,7 +29,7 @@ import { contributionAPI } from '../services/api';
 import { usePermissions } from '../hooks/useAuth';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ContributionPaymentForm from '../components/forms/ContributionPaymentForm';
-import { PdfExportDropdown } from '../components/common/PdfExportButton';
+import { PdfExportDropdown } from '../components/pdf/PdfExportButton';
 import toast from 'react-hot-toast';
 import './Contributions.css';
 

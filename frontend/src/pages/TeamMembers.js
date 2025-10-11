@@ -32,7 +32,7 @@ import { memberAPI, contributionAPI } from '../services/api';
 import { usePermissions } from '../hooks/useAuth';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import TeamMemberForm from '../components/forms/TeamMemberForm';
-import PdfExportButton from '../components/common/PdfExportButton';
+import PdfExportButton from '../components/pdf/PdfExportButton';
 import toast from 'react-hot-toast';
 import './TeamMembers.css';
 

@@ -39,7 +39,7 @@ import { transactionAPI, categoryAPI } from '../services/api';
 import { usePermissions } from '../hooks/useAuth';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import TransactionForm from '../components/forms/TransactionForm';
-import PdfExportButtons, { QuickPdfAction } from '../components/pdf/PdfExportButtons';
+import PdfExportButtons, { QuickPdfAction } from '../components/pdf/PdfExportButton';
 import toast from 'react-hot-toast';
 import './Transactions.css';
 

@@ -1344,3 +1344,189 @@
     grid-template-columns: repeat(2, 1fr) !important;
   }
 }
+
+/* Badge statut "Non concerné" - Style violet clair cohérent et TRÈS visible */
+.status-badge.modern.status-non-concerne {
+  background: linear-gradient(135deg, #A78BFA 0%, #8B5CF6 100%);
+  border: 2px solid #7C3AED;
+  color: white !important;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 8px 16px;
+  box-shadow: 0 3px 10px rgba(168, 85, 247, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.modern.status-non-concerne svg {
+  color: white !important;
+}
+
+/* Carte avec bordure pour "Non concerné" */
+.contribution-card.modern.status-non-concerne {
+  border-left: 4px solid #A78BFA;
+  background: linear-gradient(135deg, #FAF5FF 0%, #F5F3FF 100%);
+  opacity: 1;
+  position: relative;
+}
+
+/* PAS de badge supplémentaire - on utilise seulement celui du header */
+
+/* Animation hover subtile pour non concerné */
+.contribution-card.modern.status-non-concerne:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(168, 85, 247, 0.15);
+}
+
+/* Style pour les montants dans les cartes non concernées */
+.contribution-card.modern.status-non-concerne .amount-info {
+  opacity: 1;
+}
+
+.contribution-card.modern.status-non-concerne .amount-value {
+  color: #7C3AED;
+  font-weight: 600;
+}
+
+/* Nom du membre TRÈS visible */
+.contribution-card.modern.status-non-concerne .member-info h3 {
+  color: #1F2937 !important;
+  font-weight: 700 !important;
+  font-size: 16px !important;
+  opacity: 1 !important;
+}
+
+/* Position visible */
+.contribution-card.modern.status-non-concerne .member-info .position {
+  color: #6B7280 !important;
+  opacity: 1 !important;
+}
+
+/* Texte des labels bien visible */
+.contribution-card.modern.status-non-concerne .amount-row span {
+  color: #4B5563 !important;
+  font-weight: 600 !important;
+}
+
+.contribution-card.modern.status-non-concerne .amount-row strong {
+  color: #7C3AED !important;
+  font-weight: 700 !important;
+}
+
+/* En-tête de la carte non concernée */
+.contribution-card.modern.status-non-concerne .contribution-header {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #E9D5FF;
+}
+
+/* Badge "Non concerné" dans les statistiques */
+.stats-card.non-concerne {
+  background: linear-gradient(135deg, #FAF5FF 0%, #F3E8FF 100%);
+  border: 2px solid #C084FC;
+}
+
+.stats-card.non-concerne .stats-icon {
+  background: linear-gradient(135deg, #C084FC 0%, #A78BFA 100%);
+  color: white;
+}
+
+/* Message explicatif pour non concerné */
+.non-concerne-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%);
+  border-left: 3px solid #A78BFA;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #6D28D9;
+  margin-top: 12px;
+  font-weight: 500;
+}
+
+.non-concerne-info svg {
+  flex-shrink: 0;
+  color: #8B5CF6;
+}
+
+/* Badge dans le header - Plus gros et visible */
+.contribution-card.modern.status-non-concerne .status-badge.modern {
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* Animation d'entrée pour les cartes non concernées */
+@keyframes fadeInNonConcerne {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.contribution-card.modern.status-non-concerne {
+  animation: fadeInNonConcerne 0.4s ease-out;
+}
+
+/* Style du bouton Synchroniser */
+.btn-info.modern {
+  background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.btn-info.modern:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+}
+
+.btn-info.modern:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-info.modern svg {
+  animation: none;
+}
+
+.btn-info.modern:hover:not(:disabled) svg {
+  animation: rotate 0.8s ease-in-out;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .contribution-card.modern.status-non-concerne {
+    opacity: 1;
+  }
+  
+  .contribution-card.modern.status-non-concerne .member-info h3 {
+    font-size: 15px !important;
+  }
+  
+  .status-badge.modern.status-non-concerne {
+    padding: 8px 14px;
+    font-size: 12px;
+  }
+}

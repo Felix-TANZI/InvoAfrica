@@ -1,7 +1,7 @@
 /*   Projet : InvoAfrica
      @Auteur : NZIKO Felix Andre
      Email : tanzifelix@gmail.com
-     version : beta 2.0 - PDF Controller COMPLET
+     version : beta 2.0 - PDF Controller AVEC FILTRES OPTIONNELS
 
      Instagram : felix_tanzi
      GitHub : Felix-TANZI
@@ -51,7 +51,7 @@ const generateTransactionReceipt = async (req, res) => {
     
     res.send(pdfBuffer);
     
-    console.log('✅ Reçu généré pour:', transaction.reference);
+    console.log(' Reçu généré pour:', transaction.reference);
     
   } catch (error) {
     console.error('❌ Erreur génération reçu:', error);
@@ -121,7 +121,6 @@ const exportTransactionsList = async (req, res) => {
     
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
     
-    // Récupérer les transactions
     const transactions = await executeQuery(`
       SELECT 
         t.id,
@@ -143,7 +142,6 @@ const exportTransactionsList = async (req, res) => {
       LIMIT 1000
     `, queryParams);
 
-    // ✅ Enrichir avec member_name
     const transactionsWithMembers = transactions.map(t => {
       let memberName = '';
       
@@ -159,7 +157,6 @@ const exportTransactionsList = async (req, res) => {
       return { ...t, member_name: memberName };
     });
     
-    // Calculer les statistiques
     const statsQuery = `
       SELECT 
         COUNT(*) as total,
@@ -173,7 +170,6 @@ const exportTransactionsList = async (req, res) => {
     const stats = statsResult[0] || {};
     stats.solde = (parseFloat(stats.montant_recettes) || 0) - (parseFloat(stats.montant_depenses) || 0);
     
-    // Générer le PDF
     const filters = { status, type, category_id, date_from, date_to, search, amount_min, amount_max };
     const doc = await PDFService.generateTransactionList(transactionsWithMembers, filters, stats);
     const pdfBuffer = await PDFService.toBuffer(doc);
@@ -185,7 +181,7 @@ const exportTransactionsList = async (req, res) => {
     
     res.send(pdfBuffer);
     
-    console.log('✅ Liste exportée:', transactionsWithMembers.length, 'transactions');
+    console.log(' Liste exportée:', transactionsWithMembers.length, 'transactions');
     
   } catch (error) {
     console.error('❌ Erreur export liste:', error);
@@ -265,7 +261,7 @@ const generateFinancialReport = async (req, res) => {
     
     res.send(pdfBuffer);
     
-    console.log('✅ Rapport généré pour:', period);
+    console.log(' Rapport généré pour:', period);
     
   } catch (error) {
     console.error('❌ Erreur génération rapport:', error);
@@ -315,7 +311,7 @@ const generateMemberStatement = async (req, res) => {
     
     res.send(pdfBuffer);
     
-    console.log('✅ Relevé généré pour:', member.name);
+    console.log(' Relevé généré pour:', member.name);
     
   } catch (error) {
     console.error('❌ Erreur génération relevé:', error);
@@ -324,39 +320,41 @@ const generateMemberStatement = async (req, res) => {
 };
 
 /**
- * ✅ NOUVEAU : Exporter la liste des Team Members
+ * Exporter TOUS les Team Members (filtres optionnels)
  */
 const exportTeamMembers = async (req, res) => {
   try {
     const { status, contribution_status } = req.query;
     
-    let whereConditions = ['tm.is_active = 1'];
+    //  Par défaut : AUCUN filtre, exporter TOUS les membres actifs
+    let whereConditions = [];
     let queryParams = [];
     
-    if (status === 'active') {
-      whereConditions.push('tm.is_active = 1');
-    } else if (status === 'inactive') {
+    // Filtrer par statut seulement si explicitement demandé
+    if (status === 'inactive') {
       whereConditions.push('tm.is_active = 0');
+    } else {
+      // Par défaut : membres actifs
+      whereConditions.push('tm.is_active = 1');
     }
     
-    const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
     
-    // Récupérer les team members avec statut cotisation du mois en cours
     const currentDate = new Date();
     const teamMembers = await executeQuery(`
       SELECT 
         tm.*,
-        COALESCE(tc.status, 'en_attente') as contribution_status,
-        tc.amount_paid
+        COALESCE(tmc.status, 'en_attente') as contribution_status,
+        tmc.amount_paid
       FROM team_members tm
-      LEFT JOIN team_contributions tc ON tm.id = tc.team_member_id 
-        AND MONTH(tc.due_date) = ? 
-        AND YEAR(tc.due_date) = ?
+      LEFT JOIN team_member_contributions tmc ON tm.id = tmc.team_member_id 
+        AND MONTH(tmc.month_year) = ? 
+        AND YEAR(tmc.month_year) = ?
       ${whereClause}
       ORDER BY tm.name ASC
     `, [currentDate.getMonth() + 1, currentDate.getFullYear()]);
     
-    // Filtrer par statut de cotisation si demandé
+    // Filtrer par statut de cotisation SEULEMENT si demandé
     let filteredMembers = teamMembers;
     if (contribution_status === 'paid') {
       filteredMembers = teamMembers.filter(m => m.contribution_status === 'paye');
@@ -365,6 +363,7 @@ const exportTeamMembers = async (req, res) => {
     } else if (contribution_status === 'advance') {
       filteredMembers = teamMembers.filter(m => m.amount_paid > 0 && m.contribution_status !== 'paye');
     }
+    // Sinon : TOUS les membres (pas de filtrage)
     
     const filters = { status, contribution_status };
     const doc = await PDFService.generateTeamMembersList(filteredMembers, filters);
@@ -377,7 +376,7 @@ const exportTeamMembers = async (req, res) => {
     
     res.send(pdfBuffer);
     
-    console.log('✅ Liste Team Members exportée:', filteredMembers.length, 'membres');
+    console.log(' Liste Team Members exportée:', filteredMembers.length, 'membres');
     
   } catch (error) {
     console.error('❌ Erreur export team members:', error);
@@ -386,24 +385,26 @@ const exportTeamMembers = async (req, res) => {
 };
 
 /**
- * ✅ NOUVEAU : Exporter la liste des Adhérents
+ * Exporter TOUS les Adhérents (filtres optionnels)
  */
 const exportAdherents = async (req, res) => {
   try {
     const { status, subscription_status } = req.query;
     
+    // Par défaut : AUCUN filtre, exporter TOUS les adhérents actifs
     let whereConditions = [];
     let queryParams = [];
     
-    if (status === 'active') {
-      whereConditions.push('a.is_active = 1');
-    } else if (status === 'inactive') {
+    // Filtrer par statut seulement si explicitement demandé
+    if (status === 'inactive') {
       whereConditions.push('a.is_active = 0');
+    } else {
+      // Par défaut : adhérents actifs
+      whereConditions.push('a.is_active = 1');
     }
     
     const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
     
-    // Récupérer les adhérents avec statut abonnement du mois en cours
     const currentDate = new Date();
     const adherents = await executeQuery(`
       SELECT 
@@ -412,13 +413,13 @@ const exportAdherents = async (req, res) => {
         ac.amount_paid
       FROM adherents a
       LEFT JOIN adherent_contributions ac ON a.id = ac.adherent_id 
-        AND MONTH(ac.due_date) = ? 
-        AND YEAR(ac.due_date) = ?
+        AND MONTH(ac.month_year) = ? 
+        AND YEAR(ac.month_year) = ?
       ${whereClause}
       ORDER BY a.name ASC
     `, [currentDate.getMonth() + 1, currentDate.getFullYear()]);
     
-    // Filtrer par statut d'abonnement si demandé
+    // Filtrer par statut d'abonnement SEULEMENT si demandé
     let filteredAdherents = adherents;
     if (subscription_status === 'paid') {
       filteredAdherents = adherents.filter(a => a.subscription_status === 'paye');
@@ -427,6 +428,7 @@ const exportAdherents = async (req, res) => {
     } else if (subscription_status === 'advance') {
       filteredAdherents = adherents.filter(a => a.amount_paid > 0 && a.subscription_status !== 'paye');
     }
+    // Sinon : TOUS les adhérents (pas de filtrage)
     
     const filters = { status, subscription_status };
     const doc = await PDFService.generateAdherentsList(filteredAdherents, filters);
@@ -439,7 +441,7 @@ const exportAdherents = async (req, res) => {
     
     res.send(pdfBuffer);
     
-    console.log('✅ Liste Adhérents exportée:', filteredAdherents.length, 'adhérents');
+    console.log(' Liste Adhérents exportée:', filteredAdherents.length, 'adhérents');
     
   } catch (error) {
     console.error('❌ Erreur export adhérents:', error);
@@ -448,7 +450,7 @@ const exportAdherents = async (req, res) => {
 };
 
 /**
- * ✅ NOUVEAU : Exporter les cotisations Team Members (avec filtre payé/non payé)
+ * Exporter les cotisations Team Members
  */
 const exportTeamContributions = async (req, res) => {
   try {
@@ -459,8 +461,8 @@ const exportTeamContributions = async (req, res) => {
     const targetMonth = month ? parseInt(month) : currentDate.getMonth() + 1;
     
     let whereConditions = [
-      'YEAR(tc.due_date) = ?',
-      'MONTH(tc.due_date) = ?'
+      'YEAR(tmc.month_year) = ?',
+      'MONTH(tmc.month_year) = ?'
     ];
     let queryParams = [targetYear, targetMonth];
     
@@ -468,17 +470,16 @@ const exportTeamContributions = async (req, res) => {
     
     const contributions = await executeQuery(`
       SELECT 
-        tc.*,
+        tmc.*,
         tm.name as member_name,
         tm.position,
         tm.email
-      FROM team_contributions tc
-      INNER JOIN team_members tm ON tc.team_member_id = tm.id
+      FROM team_member_contributions tmc
+      INNER JOIN team_members tm ON tmc.team_member_id = tm.id
       ${whereClause}
       ORDER BY tm.name ASC
     `, queryParams);
     
-    // Filtrer par statut de paiement si demandé
     let filteredContributions = contributions;
     if (paid === 'yes') {
       filteredContributions = contributions.filter(c => c.status === 'paye');
@@ -500,7 +501,7 @@ const exportTeamContributions = async (req, res) => {
     
     res.send(pdfBuffer);
     
-    console.log('✅ Cotisations Team exportées:', filteredContributions.length);
+    console.log(' Cotisations Team exportées:', filteredContributions.length);
     
   } catch (error) {
     console.error('❌ Erreur export cotisations team:', error);
@@ -509,7 +510,7 @@ const exportTeamContributions = async (req, res) => {
 };
 
 /**
- * ✅ NOUVEAU : Exporter les abonnements Adhérents (avec filtre payé/non payé)
+ * Exporter les abonnements Adhérents
  */
 const exportAdherentContributions = async (req, res) => {
   try {
@@ -520,8 +521,8 @@ const exportAdherentContributions = async (req, res) => {
     const targetMonth = month ? parseInt(month) : currentDate.getMonth() + 1;
     
     let whereConditions = [
-      'YEAR(ac.due_date) = ?',
-      'MONTH(ac.due_date) = ?'
+      'YEAR(ac.month_year) = ?',
+      'MONTH(ac.month_year) = ?'
     ];
     let queryParams = [targetYear, targetMonth];
     
@@ -539,7 +540,6 @@ const exportAdherentContributions = async (req, res) => {
       ORDER BY a.name ASC
     `, queryParams);
     
-    // Filtrer par statut de paiement si demandé
     let filteredContributions = contributions;
     if (paid === 'yes') {
       filteredContributions = contributions.filter(c => c.status === 'paye');
@@ -561,7 +561,7 @@ const exportAdherentContributions = async (req, res) => {
     
     res.send(pdfBuffer);
     
-    console.log('✅ Abonnements Adhérents exportés:', filteredContributions.length);
+    console.log(' Abonnements Adhérents exportés:', filteredContributions.length);
     
   } catch (error) {
     console.error('❌ Erreur export abonnements adhérents:', error);

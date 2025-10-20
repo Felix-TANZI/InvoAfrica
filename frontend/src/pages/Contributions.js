@@ -1,7 +1,7 @@
 /*   Projet : InvoAfrica
      @Auteur : NZIKO Felix Andre
      Email : tanzifelix@gmail.com
-     version : beta 1.0
+     version : beta 1.0 
 
      Instagram : felix_tanzi
      GitHub : Felix-TANZI
@@ -23,7 +23,9 @@ import {
   Sparkles,
   Target,
   Award,
-  BarChart3
+  BarChart3,
+  MinusCircle,
+  RefreshCw 
 } from 'lucide-react';
 import { contributionAPI } from '../services/api';
 import { usePermissions } from '../hooks/useAuth';
@@ -153,6 +155,43 @@ const Contributions = () => {
     }
   };
 
+  //  Fonction de synchronisation manuelle
+  const handleSyncMissing = async () => {
+    try {
+      const confirmed = window.confirm(
+        '⚠️ Cette action va créer les cotisations manquantes pour tous les membres actifs.\n\n' +
+        'Voulez-vous continuer ?'
+      );
+      
+      if (!confirmed) return;
+      
+      setLoading(true);
+      const response = await contributionAPI.syncMissing();
+      
+      if (response.status === 'success') {
+        const { total_created, team_members, adherents } = response.data;
+        
+        toast.success(
+          `✅ Synchronisation terminée !\n` +
+          `${total_created} cotisations créées\n` +
+          `Team: ${team_members.created} | Adhérents: ${adherents.created}`
+        );
+        
+        // Recharger les données
+        if (activeTab === 'team') {
+          fetchTeamContributions();
+        } else {
+          fetchAdherentContributions();
+        }
+      }
+    } catch (err) {
+      console.error('Erreur synchronisation:', err);
+      toast.error('Erreur lors de la synchronisation');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const formatAmount = (amount) => {
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
     if (isNaN(numAmount) || numAmount === null || numAmount === undefined) {
@@ -187,7 +226,19 @@ const Contributions = () => {
     });
   };
 
+  //  Fonction getStatusInfo avec gestion 'non_concerne'
   const getStatusInfo = (status, daysLate, amountPaid, totalAmount) => {
+    // Gérer le statut 'non_concerne' en premier
+    if (status === 'non_concerne') {
+      return {
+        label: 'Non concerné',
+        class: 'status-non-concerne',
+        icon: MinusCircle,
+        description: 'Membre inscrit après ce mois'
+      };
+    }
+
+    // Paiement complet
     if (status === 'paye') {
       return { 
         label: 'Payé', 
@@ -195,30 +246,38 @@ const Contributions = () => {
         icon: CheckCircle,
         description: 'Cotisation complète payée'
       };
-    } else if (amountPaid > 0 && amountPaid < totalAmount) {
+    }
+
+    // Avance partielle
+    if (amountPaid > 0 && amountPaid < totalAmount) {
       return { 
         label: 'Avance', 
         class: 'status-info', 
         icon: TrendingUp,
         description: `Avance de ${formatAmount(amountPaid)}`
       };
-    } else if (daysLate > 0) {
+    }
+
+    // En retard
+    if (daysLate > 0) {
       return { 
         label: `Retard ${daysLate}j`, 
         class: 'status-danger', 
         icon: AlertCircle,
         description: `En retard de ${daysLate} jour(s)`
       };
-    } else {
-      return { 
-        label: 'En attente', 
-        class: 'status-warning', 
-        icon: Clock,
-        description: 'Paiement en attente'
-      };
     }
+
+    // En attente
+    return { 
+      label: 'En attente', 
+      class: 'status-warning', 
+      icon: Clock,
+      description: 'Paiement en attente'
+    };
   };
 
+  //  Fonction getFilteredContributions avec gestion 'non_concerne'
   const getFilteredContributions = () => {
     const contributions = activeTab === 'team' ? teamContributions : adherentContributions;
     
@@ -231,6 +290,8 @@ const Contributions = () => {
         return contributions.filter(c => c.status === 'en_attente' && (c.days_late || 0) > 0);
       case 'advance':
         return contributions.filter(c => (c.amount_paid || 0) > 0 && (c.amount_paid || 0) < (c.amount || 0));
+      case 'non_concerne':
+        return contributions.filter(c => c.status === 'non_concerne');
       default:
         return contributions;
     }
@@ -270,22 +331,34 @@ const Contributions = () => {
           
           <div className="header-actions modern">
             {isAdmin && (
-              <button 
-                className="btn-secondary modern"
-                onClick={handleGenerateContributions}
-                title="Générer les cotisations du mois"
-              >
-                <Plus size={20} />
-                Générer
-              </button>
+              <>
+                <button 
+                  className="btn-secondary modern"
+                  onClick={handleGenerateContributions}
+                  title="Générer les cotisations du mois"
+                >
+                  <Plus size={20} />
+                  Générer
+                </button>
+                
+                {/*  Bouton de synchronisation */}
+                <button 
+                  className="btn-info modern"
+                  onClick={handleSyncMissing}
+                  title="Synchroniser les cotisations manquantes"
+                  disabled={loading}
+                >
+                  <RefreshCw size={20} />
+                  Synchroniser
+                </button>
+              </>
             )}
 
-            {/* ✅ NOUVEAU : Bouton PDF avec dropdown (Tous/Payés/Non payés) */}
-    <PdfExportDropdown 
-      variant={activeTab === 'team' ? 'team-contributions' : 'adherent-contributions'}
-      currentMonth={currentMonth}
-      currentYear={currentYear}
-    />
+            <PdfExportDropdown 
+              variant={activeTab === 'team' ? 'team-contributions' : 'adherent-contributions'}
+              currentMonth={currentMonth}
+              currentYear={currentYear}
+            />
             
             <div className="period-selector modern">
               <select 
@@ -373,6 +446,7 @@ const Contributions = () => {
           </button>
         </div>
 
+        {/*  Dropdown de filtre avec option non_concerne */}
         <div className="filter-section modern">
           <Filter size={16} />
           <select value={filter} onChange={(e) => setFilter(e.target.value)}>
@@ -381,6 +455,7 @@ const Contributions = () => {
             <option value="advance">Avances</option>
             <option value="pending">En attente</option>
             <option value="late">En retard</option>
+            <option value="non_concerne">Non concernés</option>
           </select>
         </div>
       </div>
@@ -457,8 +532,9 @@ const Contributions = () => {
                     )}
                   </div>
 
+                  {/*  Désactiver bouton Payer pour 'non_concerne' */}
                   <div className="contribution-actions modern">
-                    {contribution.status !== 'paye' && canManageUsers && (
+                    {contribution.status !== 'paye' && contribution.status !== 'non_concerne' && canManageUsers && (
                       <button 
                         className="btn-pay modern"
                         onClick={() => handleMarkAsPaid(contribution)}
@@ -485,33 +561,22 @@ const Contributions = () => {
             <h3>Aucune cotisation trouvée</h3>
             <p>
               {filter === 'all' 
-                ? `Aucune cotisation pour ${monthNames[currentMonth - 1]} ${currentYear}`
-                : `Aucune cotisation correspondant au filtre "${filter}"`
+                ? 'Aucune cotisation générée pour ce mois'
+                : `Aucune cotisation avec le filtre "${filter}"`
               }
             </p>
-            {isAdmin && filter === 'all' && (
-              <button className="btn-primary modern" onClick={handleGenerateContributions}>
-                <Plus size={20} />
-                Générer les cotisations
-              </button>
-            )}
           </div>
         )}
       </div>
 
       {/* Modal de paiement */}
-      {showPaymentForm && selectedContribution && (
-        <ContributionPaymentForm
-          isOpen={showPaymentForm}
-          onClose={() => {
-            setShowPaymentForm(false);
-            setSelectedContribution(null);
-          }}
-          onSuccess={handlePaymentSuccess}
-          contribution={selectedContribution}
-          type={activeTab}
-        />
-      )}
+      <ContributionPaymentForm
+        isOpen={showPaymentForm}
+        onClose={() => setShowPaymentForm(false)}
+        onSuccess={handlePaymentSuccess}
+        contribution={selectedContribution}
+        type={activeTab}
+      />
     </div>
   );
 };

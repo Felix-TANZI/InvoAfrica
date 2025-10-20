@@ -7,16 +7,106 @@
      GitHub : Felix-TANZI
      Linkedin : Felix TANZI */
 
-
-const { executeQuery } = require('../config/database');
+const { executeQuery, executeTransaction } = require('../config/database');
 const { sanitizeInput, isValidEmail, isValidPhone, sendResponse, generateReference } = require('../utils/helpers');
 
 // Constantes pour les frais d'adhésion et cotisations
-const ADHESION_FEE = 1000; // Frais d'adhésion fixes en FCFA
-const ADHESION_CATEGORY_ID = 1; // ID de la catégorie "Adhésions" dans la base
-const DEFAULT_ADHERENT_CONTRIBUTION = 500; // Cotisation mensuelle adhérent en FCFA
+const ADHESION_FEE = 1000;
+const ADHESION_CATEGORY_ID = 1;
+const DEFAULT_TEAM_CONTRIBUTION = 2000;
+const DEFAULT_ADHERENT_CONTRIBUTION = 500;
+
+
+// FONCTIONS UTILITAIRES POUR AUTO-GÉNÉRATION
+
+
+/**
+ * Récupère tous les mois déjà générés en base de données
+ */
+const getGeneratedMonths = async (type = 'team') => {
+  const table = type === 'team' ? 'team_member_contributions' : 'adherent_contributions';
+  
+  const months = await executeQuery(`
+    SELECT DISTINCT month_year 
+    FROM ${table} 
+    ORDER BY month_year
+  `);
+  
+  return months.map(m => m.month_year);
+};
+
+/**
+ * Crée les cotisations pour un membre sur tous les mois déjà générés
+ */
+const createMemberContributions = async (memberId, registrationDate, type = 'team') => {
+  try {
+    const table = type === 'team' ? 'team_member_contributions' : 'adherent_contributions';
+    const idColumn = type === 'team' ? 'team_member_id' : 'adherent_id';
+    const amount = type === 'team' ? DEFAULT_TEAM_CONTRIBUTION : DEFAULT_ADHERENT_CONTRIBUTION;
+    
+    // Récupérer tous les mois déjà générés
+    const generatedMonths = await getGeneratedMonths(type);
+    
+    if (generatedMonths.length === 0) {
+      console.log(`ℹ️ Aucun mois généré pour ${type}, pas de cotisation à créer`);
+      return { created: 0, months: [] };
+    }
+    
+    // Extraire uniquement année et mois pour comparaison
+    const registrationDateObj = new Date(registrationDate);
+    const registrationYear = registrationDateObj.getFullYear();
+    const registrationMonth = registrationDateObj.getMonth(); // 0-11 (janvier = 0, décembre = 11)
+    
+    console.log(`📅 Membre inscrit : ${registrationYear}-${registrationMonth + 1} (mois ${registrationMonth})`);
+    
+    // Préparer les insertions
+    const insertQueries = generatedMonths.map(monthYear => {
+      const monthYearObj = new Date(monthYear);
+      const monthYear_year = monthYearObj.getFullYear();
+      const monthYear_month = monthYearObj.getMonth(); // 0-11
+      
+      // Comparer année-mois uniquement (pas le jour)
+      let status = 'en_attente';
+      
+      if (monthYear_year < registrationYear) {
+        // Année antérieure à l'inscription
+        status = 'non_concerne';
+        console.log(`  ❌ ${monthYear} → non_concerne (année ${monthYear_year} < ${registrationYear})`);
+      } else if (monthYear_year === registrationYear && monthYear_month < registrationMonth) {
+        // Même année mais mois antérieur
+        status = 'non_concerne';
+        console.log(`  ❌ ${monthYear} → non_concerne (mois ${monthYear_month} < ${registrationMonth})`);
+      } else {
+        console.log(`  ✅ ${monthYear} → en_attente (mois ${monthYear_month} >= ${registrationMonth})`);
+      }
+      
+      return {
+        query: `INSERT INTO ${table} 
+                (${idColumn}, month_year, amount, amount_paid, penalty_amount, status) 
+                VALUES (?, ?, ?, 0, 0, ?)`,
+        params: [memberId, monthYear, amount, status]
+      };
+    });
+    
+    // Exécuter en transaction
+    await executeTransaction(insertQueries);
+    
+    console.log(`✅ ${insertQueries.length} cotisations créées pour ${type} ID ${memberId}`);
+    
+    return {
+      created: insertQueries.length,
+      months: generatedMonths
+    };
+    
+  } catch (error) {
+    console.error(`❌ Erreur création cotisations pour ${type}:`, error.message);
+    throw error;
+  }
+};
+
 
 // TEAM MEMBERS (Membres du Bureau)
+
 
 // Récupérer tous les team members
 const getTeamMembers = async (req, res) => {
@@ -79,22 +169,38 @@ const createTeamMember = async (req, res) => {
       }
     }
 
+    // Insérer le membre
     const result = await executeQuery(`
       INSERT INTO team_members (name, email, phone, position, registration_date, notes)
       VALUES (?, ?, ?, ?, ?, ?)
     `, [cleanName, cleanEmail, cleanPhone, cleanPosition, registration_date, cleanNotes]);
 
-    const newMember = await executeQuery(
-      'SELECT * FROM team_members WHERE id = ?',
-      [result.insertId]
+    const newMemberId = result.insertId;
+
+    // Créer les cotisations pour tous les mois déjà générés
+    const contributionsResult = await createMemberContributions(
+      newMemberId, 
+      registration_date, 
+      'team'
     );
 
+    // Récupérer le membre créé
+    const newMember = await executeQuery(
+      'SELECT * FROM team_members WHERE id = ?',
+      [newMemberId]
+    );
+
+    console.log(`✅ Team member créé: ${cleanName} (ID: ${newMemberId})`);
+    console.log(`   📊 Cotisations auto-générées: ${contributionsResult.created} mois`);
+
     return sendResponse(res, 201, 'Membre du bureau créé avec succès', {
-      team_member: newMember[0]
+      team_member: newMember[0],
+      contributions_generated: contributionsResult.created,
+      months: contributionsResult.months
     });
 
   } catch (error) {
-    console.error('❌ Erreur lors de la création du membre du bureau:', error.message);
+    console.error('❌ Erreur lors de la création du team member:', error.message);
     return sendResponse(res, 500, 'Erreur interne du serveur');
   }
 };
@@ -109,74 +215,93 @@ const updateTeamMember = async (req, res) => {
       return sendResponse(res, 400, 'ID invalide');
     }
 
-    const existingMember = await executeQuery('SELECT id FROM team_members WHERE id = ?', [id]);
-    if (existingMember.length === 0) {
-      return sendResponse(res, 404, 'Membre non trouvé');
+    // Vérifier existence
+    const existing = await executeQuery('SELECT * FROM team_members WHERE id = ?', [id]);
+    if (existing.length === 0) {
+      return sendResponse(res, 404, 'Membre du bureau non trouvé');
     }
 
+    // Préparer les champs à mettre à jour
     let updateFields = [];
-    let updateParams = [];
+    let updateValues = [];
 
-    if (name) {
+    if (name !== undefined) {
       updateFields.push('name = ?');
-      updateParams.push(sanitizeInput(name));
+      updateValues.push(sanitizeInput(name));
     }
+
     if (email !== undefined) {
-      if (email && !isValidEmail(email)) {
+      const cleanEmail = email ? sanitizeInput(email.toLowerCase()) : null;
+      if (cleanEmail && !isValidEmail(cleanEmail)) {
         return sendResponse(res, 400, 'Format d\'email invalide');
       }
+      
+      // Vérifier unicité
+      if (cleanEmail) {
+        const emailCheck = await executeQuery(
+          'SELECT id FROM team_members WHERE email = ? AND id != ?',
+          [cleanEmail, id]
+        );
+        if (emailCheck.length > 0) {
+          return sendResponse(res, 409, 'Un membre avec cet email existe déjà');
+        }
+      }
+      
       updateFields.push('email = ?');
-      updateParams.push(email ? sanitizeInput(email.toLowerCase()) : null);
+      updateValues.push(cleanEmail);
     }
+
     if (phone !== undefined) {
-      if (phone && !isValidPhone(phone)) {
+      const cleanPhone = phone ? sanitizeInput(phone) : null;
+      if (cleanPhone && !isValidPhone(cleanPhone)) {
         return sendResponse(res, 400, 'Format de téléphone invalide');
       }
       updateFields.push('phone = ?');
-      updateParams.push(phone ? sanitizeInput(phone) : null);
+      updateValues.push(cleanPhone);
     }
+
     if (position !== undefined) {
       updateFields.push('position = ?');
-      updateParams.push(position ? sanitizeInput(position) : null);
+      updateValues.push(position ? sanitizeInput(position) : null);
     }
+
     if (is_active !== undefined) {
       updateFields.push('is_active = ?');
-      updateParams.push(is_active ? 1 : 0);
+      updateValues.push(is_active ? 1 : 0);
     }
+
     if (penalty_amount !== undefined) {
       updateFields.push('penalty_amount = ?');
-      updateParams.push(parseFloat(penalty_amount) || 0);
+      updateValues.push(parseFloat(penalty_amount) || 0);
     }
+
     if (notes !== undefined) {
       updateFields.push('notes = ?');
-      updateParams.push(notes ? sanitizeInput(notes) : null);
+      updateValues.push(notes ? sanitizeInput(notes) : null);
     }
 
     if (updateFields.length === 0) {
-      return sendResponse(res, 400, 'Aucune donnée à mettre à jour');
+      return sendResponse(res, 400, 'Aucun champ à mettre à jour');
     }
 
-    updateFields.push('updated_at = CURRENT_TIMESTAMP');
-    updateParams.push(id);
+    updateValues.push(id);
 
-    await executeQuery(`
-      UPDATE team_members 
-      SET ${updateFields.join(', ')} 
-      WHERE id = ?
-    `, updateParams);
+    await executeQuery(
+      `UPDATE team_members SET ${updateFields.join(', ')} WHERE id = ?`,
+      updateValues
+    );
 
-    const updatedMember = await executeQuery('SELECT * FROM team_members WHERE id = ?', [id]);
+    const updated = await executeQuery('SELECT * FROM team_members WHERE id = ?', [id]);
 
-    return sendResponse(res, 200, 'Membre modifié avec succès', {
-      team_member: updatedMember[0]
+    return sendResponse(res, 200, 'Membre du bureau mis à jour avec succès', {
+      team_member: updated[0]
     });
 
   } catch (error) {
-    console.error('❌ Erreur lors de la modification du membre:', error.message);
+    console.error('❌ Erreur lors de la mise à jour du team member:', error.message);
     return sendResponse(res, 500, 'Erreur interne du serveur');
   }
 };
-
 
 // ADHERENTS
 
@@ -205,24 +330,13 @@ const getAdherents = async (req, res) => {
   }
 };
 
-// Créer un adhérent avec création automatique de la transaction des frais d'adhésion
+// Créer un adhérent
 const createAdherent = async (req, res) => {
   try {
-    const { name, email, phone, registration_date, notes, payment_mode } = req.body;
+    const { name, email, phone, registration_date, notes } = req.body;
 
-    // Validations de base
     if (!name || !registration_date) {
       return sendResponse(res, 400, 'Nom et date d\'inscription requis');
-    }
-
-    if (!payment_mode) {
-      return sendResponse(res, 400, 'Mode de paiement requis pour les frais d\'adhésion');
-    }
-
-    // Vérifier que le mode de paiement est valide
-    const validPaymentModes = ['cash', 'om', 'momo', 'virement', 'cheque'];
-    if (!validPaymentModes.includes(payment_mode)) {
-      return sendResponse(res, 400, 'Mode de paiement invalide');
     }
 
     const cleanName = sanitizeInput(name);
@@ -251,106 +365,51 @@ const createAdherent = async (req, res) => {
       }
     }
 
-    // 1. Créer l'adhérent
+    // Insérer l'adhérent
     const result = await executeQuery(`
       INSERT INTO adherents (name, email, phone, registration_date, notes)
       VALUES (?, ?, ?, ?, ?)
     `, [cleanName, cleanEmail, cleanPhone, registration_date, cleanNotes]);
 
-    const adherentId = result.insertId;
+    const newAdherentId = result.insertId;
 
-    // 2. Créer automatiquement la transaction des frais d'adhésion
-    try {
-      // Générer une référence unique pour la transaction
-      const transactionYear = new Date(registration_date).getFullYear();
-      const baseReference = generateReference('ADH', transactionYear);
-      
-      // Vérifier l'unicité de la référence
-      let uniqueReference = baseReference;
-      let counter = 1;
-      while (true) {
-        const existing = await executeQuery(
-          'SELECT id FROM transactions WHERE reference = ?',
-          [uniqueReference]
-        );
-        if (existing.length === 0) break;
-        uniqueReference = `${baseReference}-${counter}`;
-        counter++;
-      }
-
-      // Description de la transaction
-      const transactionDescription = `Frais d'adhésion - ${cleanName}`;
-
-      // Insérer la transaction
-      await executeQuery(`
-        INSERT INTO transactions (
-          reference, category_id, amount, type, description,
-          transaction_date, payment_mode, status, contact_person,
-          created_by, validated_by, validated_at, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
-      `, [
-        uniqueReference,
-        ADHESION_CATEGORY_ID,
-        ADHESION_FEE,
-        'recette',
-        transactionDescription,
-        registration_date,
-        payment_mode,
-        'validee', // Transaction validée automatiquement car paiement obligatoire
-        cleanName,
-        req.user.id,
-        req.user.id,
-        'Frais d\'adhésion payés lors de l\'inscription'
-      ]);
-
-      console.log(`✅ Transaction d'adhésion créée: ${uniqueReference} - ${cleanName} - ${ADHESION_FEE} FCFA`);
-
-    } catch (transactionError) {
-      console.error('❌ Erreur lors de la création de la transaction d\'adhésion:', transactionError.message);
-      // On continue même si la transaction échoue, mais on log l'erreur
-      // L'adhérent est déjà créé à ce stade
-    }
-
-    // 3. Créer automatiquement la cotisation du mois en cours
-    try {
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth() + 1;
-      const monthYear = `${currentYear}-${String(currentMonth).padStart(2, '0')}-01`;
-
-      // Vérifier si une cotisation existe déjà pour ce mois (au cas où)
-      const existingContribution = await executeQuery(
-        'SELECT id FROM adherent_contributions WHERE adherent_id = ? AND month_year = ?',
-        [adherentId, monthYear]
-      );
-
-      if (existingContribution.length === 0) {
-        // Créer la cotisation du mois en cours
-        await executeQuery(`
-          INSERT INTO adherent_contributions (
-            adherent_id, month_year, amount, amount_paid, penalty_amount, status
-          ) VALUES (?, ?, ?, 0, 0, 'en_attente')
-        `, [adherentId, monthYear, DEFAULT_ADHERENT_CONTRIBUTION]);
-
-        console.log(`✅ Cotisation ${monthYear} créée pour l'adhérent ${cleanName} - ${DEFAULT_ADHERENT_CONTRIBUTION} FCFA`);
-      }
-
-    } catch (contributionError) {
-      console.error('❌ Erreur lors de la création de la cotisation mensuelle:', contributionError.message);
-      // On continue même si la cotisation échoue
-    }
-
-    // 4. Récupérer l'adhérent créé
-    const newAdherent = await executeQuery(
-      'SELECT * FROM adherents WHERE id = ?',
-      [adherentId]
+    // Créer les cotisations pour tous les mois déjà générés
+    const contributionsResult = await createMemberContributions(
+      newAdherentId, 
+      registration_date, 
+      'adherent'
     );
 
-    return sendResponse(res, 201, 'Adhérent créé avec succès - Frais d\'adhésion et cotisation enregistrés', {
+    // Enregistrer la transaction de frais d'adhésion
+    const transactionRef = generateReference('ADH');
+    
+    await executeQuery(`
+      INSERT INTO transactions 
+      (reference, category_id, amount, type, description, transaction_date, payment_mode, status, created_by, validated_by, validated_at)
+      VALUES (?, ?, ?, 'recette', ?, NOW(), 'cash', 'validee', 1, 1, NOW())
+    `, [
+      transactionRef,
+      ADHESION_CATEGORY_ID,
+      ADHESION_FEE,
+      `Frais d'adhésion - ${cleanName}`
+    ]);
+
+    // Récupérer l'adhérent créé
+    const newAdherent = await executeQuery(
+      'SELECT * FROM adherents WHERE id = ?',
+      [newAdherentId]
+    );
+
+    console.log(`✅ Adhérent créé: ${cleanName} (ID: ${newAdherentId})`);
+    console.log(`   💰 Frais d'adhésion enregistrés: ${ADHESION_FEE} FCFA`);
+    console.log(`   📊 Cotisations auto-générées: ${contributionsResult.created} mois`);
+
+    return sendResponse(res, 201, 'Adhérent créé avec succès', {
       adherent: newAdherent[0],
       adhesion_fee: ADHESION_FEE,
-      monthly_contribution: DEFAULT_ADHERENT_CONTRIBUTION,
-      payment_mode: payment_mode
+      transaction_reference: transactionRef,
+      contributions_generated: contributionsResult.created,
+      months: contributionsResult.months
     });
 
   } catch (error) {
@@ -369,66 +428,85 @@ const updateAdherent = async (req, res) => {
       return sendResponse(res, 400, 'ID invalide');
     }
 
-    const existingAdherent = await executeQuery('SELECT id FROM adherents WHERE id = ?', [id]);
-    if (existingAdherent.length === 0) {
+    // Vérifier existence
+    const existing = await executeQuery('SELECT * FROM adherents WHERE id = ?', [id]);
+    if (existing.length === 0) {
       return sendResponse(res, 404, 'Adhérent non trouvé');
     }
 
+    // Préparer les champs à mettre à jour
     let updateFields = [];
-    let updateParams = [];
+    let updateValues = [];
 
-    if (name) {
+    if (name !== undefined) {
       updateFields.push('name = ?');
-      updateParams.push(sanitizeInput(name));
+      updateValues.push(sanitizeInput(name));
     }
+
     if (email !== undefined) {
-      if (email && !isValidEmail(email)) {
+      const cleanEmail = email ? sanitizeInput(email.toLowerCase()) : null;
+      if (cleanEmail && !isValidEmail(cleanEmail)) {
         return sendResponse(res, 400, 'Format d\'email invalide');
       }
+      
+      // Vérifier unicité
+      if (cleanEmail) {
+        const emailCheck = await executeQuery(
+          'SELECT id FROM adherents WHERE email = ? AND id != ?',
+          [cleanEmail, id]
+        );
+        if (emailCheck.length > 0) {
+          return sendResponse(res, 409, 'Un adhérent avec cet email existe déjà');
+        }
+      }
+      
       updateFields.push('email = ?');
-      updateParams.push(email ? sanitizeInput(email.toLowerCase()) : null);
+      updateValues.push(cleanEmail);
     }
+
     if (phone !== undefined) {
-      if (phone && !isValidPhone(phone)) {
+      const cleanPhone = phone ? sanitizeInput(phone) : null;
+      if (cleanPhone && !isValidPhone(cleanPhone)) {
         return sendResponse(res, 400, 'Format de téléphone invalide');
       }
       updateFields.push('phone = ?');
-      updateParams.push(phone ? sanitizeInput(phone) : null);
+      updateValues.push(cleanPhone);
     }
+
     if (is_active !== undefined) {
       updateFields.push('is_active = ?');
-      updateParams.push(is_active ? 1 : 0);
+      updateValues.push(is_active ? 1 : 0);
     }
+
     if (penalty_amount !== undefined) {
       updateFields.push('penalty_amount = ?');
-      updateParams.push(parseFloat(penalty_amount) || 0);
+      updateValues.push(parseFloat(penalty_amount) || 0);
     }
+
     if (notes !== undefined) {
       updateFields.push('notes = ?');
-      updateParams.push(notes ? sanitizeInput(notes) : null);
+      updateValues.push(notes ? sanitizeInput(notes) : null);
     }
 
     if (updateFields.length === 0) {
-      return sendResponse(res, 400, 'Aucune donnée à mettre à jour');
+      return sendResponse(res, 400, 'Aucun champ à mettre à jour');
     }
 
-    updateFields.push('updated_at = CURRENT_TIMESTAMP');
-    updateParams.push(id);
+    updateValues.push(id);
 
-    await executeQuery(`
-      UPDATE adherents 
-      SET ${updateFields.join(', ')} 
-      WHERE id = ?
-    `, updateParams);
+    await executeQuery(
+      `UPDATE adherents SET ${updateFields.join(', ')} WHERE id = ?`,
+      updateValues
+    );
 
-    const updatedAdherent = await executeQuery('SELECT * FROM adherents WHERE id = ?', [id]);
+    const updated = await executeQuery('SELECT * FROM adherents WHERE id = ?', [id]);
 
-    return sendResponse(res, 200, 'Adhérent modifié avec succès', {
-      adherent: updatedAdherent[0]
+    return sendResponse(res, 200, 'Adhérent mis à jour avec succès', {
+      adherent: updated[0]
     });
 
   } catch (error) {
-    console.error('❌ Erreur lors de la modification de l\'adhérent:', error.message);
+    console.error('❌ Erreur lors de la mise à jour de l\'adhérent:', error.message);
     return sendResponse(res, 500, 'Erreur interne du serveur');
   }
 };

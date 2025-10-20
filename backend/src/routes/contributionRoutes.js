@@ -41,6 +41,14 @@ router.post('/generate/adherents', authenticateToken, adminOnly, contributionCon
  */
 router.post('/generate/current', authenticateToken, adminOnly, contributionController.generateCurrentMonthContributions);
 
+/**
+ * @route   POST /api/contributions/sync-missing
+ * @desc    Synchroniser les cotisations manquantes pour tous les membres
+ * @access  Private (admin seulement)
+ */
+router.post('/sync-missing', authenticateToken, adminOnly, contributionController.syncMissingContributions);
+
+
 
 // GESTION DES PAIEMENTS
 

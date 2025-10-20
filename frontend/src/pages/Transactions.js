@@ -1,7 +1,7 @@
 /*   Projet : InvoAfrica
      @Auteur : NZIKO Felix Andre
      Email : tanzifelix@gmail.com
-     version : beta 1.0 - AVEC PDF
+     version : beta 1.0
 
      Instagram : felix_tanzi
      GitHub : Felix-TANZI
@@ -36,10 +36,11 @@ import {
   FileText
 } from 'lucide-react';
 import { transactionAPI, categoryAPI } from '../services/api';
+import pdfAPI from '../services/pdfAPI';
 import { usePermissions } from '../hooks/useAuth';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import TransactionForm from '../components/forms/TransactionForm';
-import PdfExportButtons, { QuickPdfAction } from '../components/pdf/PdfExportButton';
+import { QuickPdfAction } from '../components/pdf/PdfExportButton';
 import toast from 'react-hot-toast';
 import './Transactions.css';
 
@@ -51,9 +52,9 @@ const Transactions = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [viewMode, setViewMode] = useState('table'); // 'table' ou 'cards'
+  const [viewMode, setViewMode] = useState('table');
+  const [exportingPDF, setExportingPDF] = useState(false);
   
-  // État pour les statistiques globales
   const [statistics, setStatistics] = useState({
     total: 0,
     recettes: 0,
@@ -65,30 +66,26 @@ const Transactions = () => {
     solde: 0
   });
   
-  // Filtres avancés
   const [filters, setFilters] = useState({
     search: '',
     status: '',
     type: '',
-    category: '', // Sera mappé à category_id
-    dateFrom: '', // Sera mappé à date_from
-    dateTo: '',   // Sera mappé à date_to
-    amountMin: '', // Sera mappé à amount_min
-    amountMax: ''  // Sera mappé à amount_max
+    category: '',
+    dateFrom: '',
+    dateTo: '',
+    amountMin: '',
+    amountMax: ''
   });
   
-  // Tri
   const [sortBy, setSortBy] = useState('transaction_date');
   const [sortOrder, setSortOrder] = useState('desc');
   
-  // Pagination
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 20,
     total: 0
   });
 
-  // Modal de création/édition
   const [showTransactionForm, setShowTransactionForm] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
 
@@ -101,7 +98,6 @@ const Transactions = () => {
     try {
       setLoading(true);
       
-      // Mapper correctement les paramètres pour le backend
       const params = {
         page: pagination.page,
         limit: pagination.limit,
@@ -117,7 +113,6 @@ const Transactions = () => {
         amount_max: filters.amountMax || undefined   
       };
 
-      // Nettoyer les undefined
       Object.keys(params).forEach(key => {
         if (params[key] === undefined) {
           delete params[key];
@@ -137,7 +132,6 @@ const Transactions = () => {
           total: response.data.pagination.totalItems
         }));
         
-        // Utiliser les statistiques globales de l'API
         if (response.data.statistics) {
           setStatistics(response.data.statistics);
           console.log('📊 Statistiques reçues:', response.data.statistics);
@@ -162,6 +156,31 @@ const Transactions = () => {
       }
     } catch (err) {
       console.error('Erreur catégories:', err);
+    }
+  };
+
+  // Export PDF
+  const handleExportPDF = async () => {
+    setExportingPDF(true);
+    const loadingToast = toast.loading('Génération du PDF en cours...');
+    
+    try {
+      await pdfAPI.exportTransactionsList({
+        status: filters.status,
+        type: filters.type,
+        category_id: filters.category,
+        date_from: filters.dateFrom,
+        date_to: filters.dateTo,
+        search: filters.search,
+        amount_min: filters.amountMin,
+        amount_max: filters.amountMax
+      });
+      toast.success('PDF exporté avec succès !', { id: loadingToast });
+    } catch (error) {
+      console.error('❌ Erreur export PDF:', error);
+      toast.error('Erreur lors de l\'export PDF', { id: loadingToast });
+    } finally {
+      setExportingPDF(false);
     }
   };
 
@@ -192,7 +211,7 @@ const Transactions = () => {
   const handleFilterChange = (key, value) => {
     console.log(`🔄 Filtre changé: ${key} = ${value}`);
     setFilters(prev => ({ ...prev, [key]: value }));
-    setPagination(prev => ({ ...prev, page: 1 })); // Reset à la page 1
+    setPagination(prev => ({ ...prev, page: 1 }));
   };
 
   const handleSort = (field) => {
@@ -338,11 +357,20 @@ const Transactions = () => {
               Actualiser
             </button>
 
-            {/* ✨ NOUVEAU - Bouton PDF Export */}
-            <PdfExportButtons 
-              variant="transaction-list"
-              filters={filters}
-            />
+            {/*  BOUTON PDF */}
+            <button 
+              className="btn-secondary"
+              onClick={handleExportPDF}
+              disabled={exportingPDF}
+              style={{
+                background: exportingPDF ? '#9ca3af' : 'linear-gradient(135deg, #FF8C00 0%, #FFA500 100%)',
+                color: 'white',
+                opacity: exportingPDF ? 0.7 : 1
+              }}
+            >
+              <Download size={18} />
+              {exportingPDF ? 'Export...' : 'Exporter PDF'}
+            </button>
             
             <button 
               className="btn-primary"
@@ -355,7 +383,7 @@ const Transactions = () => {
         </div>
       </div>
 
-      {/* Stats globales provenant de l'API */}
+      {/* Stats globales */}
       <div className="stats-overview">
         <div className="stat-item">
           <div className="stat-icon total">
@@ -416,7 +444,6 @@ const Transactions = () => {
         </div>
 
         <div className="filters-grid">
-          {/* Recherche */}
           <div className="filter-group search-group">
             <div className="search-input-container">
               <Search size={18} className="search-icon" />
@@ -430,7 +457,6 @@ const Transactions = () => {
             </div>
           </div>
 
-          {/* Statut */}
           <div className="filter-group">
             <label>Statut</label>
             <select
@@ -445,7 +471,6 @@ const Transactions = () => {
             </select>
           </div>
 
-          {/* Type */}
           <div className="filter-group">
             <label>Type</label>
             <select
@@ -459,7 +484,6 @@ const Transactions = () => {
             </select>
           </div>
 
-          {/* Catégorie */}
           <div className="filter-group">
             <label>Catégorie</label>
             <select
@@ -476,7 +500,6 @@ const Transactions = () => {
             </select>
           </div>
 
-          {/* Date de début */}
           <div className="filter-group">
             <label>Date de début</label>
             <input
@@ -487,7 +510,6 @@ const Transactions = () => {
             />
           </div>
 
-          {/* Date de fin */}
           <div className="filter-group">
             <label>Date de fin</label>
             <input
@@ -498,7 +520,6 @@ const Transactions = () => {
             />
           </div>
 
-          {/* Montant minimum */}
           <div className="filter-group">
             <label>Montant min (FCFA)</label>
             <input
@@ -511,7 +532,6 @@ const Transactions = () => {
             />
           </div>
 
-          {/* Montant maximum */}
           <div className="filter-group">
             <label>Montant max (FCFA)</label>
             <input
@@ -599,7 +619,6 @@ const Transactions = () => {
           </div>
         )}
 
-        {/* État vide */}
         {transactions.length === 0 && !loading && (
           <div className="empty-state modern">
             <div className="empty-icon">
@@ -626,7 +645,6 @@ const Transactions = () => {
         )}
       </div>
 
-      {/* Modal de création/édition */}
       <TransactionForm
         isOpen={showTransactionForm}
         onClose={handleCloseForm}
@@ -639,7 +657,6 @@ const Transactions = () => {
 
 
 // COMPOSANT TABLE
-
 const TransactionTable = ({ 
   transactions, 
   onSort, 
@@ -729,11 +746,11 @@ const TransactionTable = ({
                       <Eye size={14} />
                     </button>
                     
-                    {/* ✨ NOUVEAU - Bouton PDF rapide pour transactions validées */}
+                    {/*  BOUTON PDF */}
                     {transaction.status === 'validee' && (
                       <QuickPdfAction 
                         transactionId={transaction.id}
-                        status={transaction.status}
+                        size={28}
                       />
                     )}
                     
@@ -779,7 +796,6 @@ const TransactionTable = ({
 
 
 // COMPOSANT CARDS
-
 const TransactionCards = ({ 
   transactions, 
   onEdit, 
@@ -850,11 +866,11 @@ const TransactionCards = ({
               Voir
             </button>
             
-            {/* ✨ NOUVEAU - Bouton reçu pour transactions validées */}
+            {/*  BOUTON PDF */}
             {transaction.status === 'validee' && (
-              <PdfExportButtons 
-                variant="receipt"
+              <QuickPdfAction 
                 transactionId={transaction.id}
+                size={28}
               />
             )}
             

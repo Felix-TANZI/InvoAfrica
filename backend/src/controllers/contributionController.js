@@ -14,9 +14,7 @@ const { sendResponse, calculateLateDays } = require('../utils/helpers');
 const DEFAULT_TEAM_CONTRIBUTION = 2000;
 const DEFAULT_ADHERENT_CONTRIBUTION = 500;
 
-// =====================================================
 // GÉNÉRATION AUTOMATIQUE DES COTISATIONS
-// =====================================================
 
 // Générer les cotisations team members pour un mois donné
 const generateTeamContributions = async (req, res) => {
@@ -151,9 +149,9 @@ const generateCurrentMonthContributions = async (req, res) => {
   }
 };
 
-// =====================================================
+
 // GESTION DES PAIEMENTS AVEC SUPPORT DES AVANCES
-// =====================================================
+
 
 // Marquer une cotisation team member comme payée (avec support des paiements partiels)
 const markTeamContributionPaid = async (req, res) => {
@@ -175,53 +173,49 @@ const markTeamContributionPaid = async (req, res) => {
     }
 
     const currentContribution = contribution[0];
+    const currentAmountPaid = parseFloat(currentContribution.amount_paid) || 0;
+    const totalAmount = parseFloat(currentContribution.amount);
 
-    // Vérifier les permissions pour changer de "paye" vers "en_attente"
-    if (currentContribution.status === 'paye' && req.user.role !== 'admin') {
-      return sendResponse(res, 403, 'Seul l\'administrateur peut modifier un paiement déjà effectué');
+    // Calculer le nouveau montant payé
+    let paymentAmount;
+    if (partial_amount) {
+      paymentAmount = parseFloat(partial_amount);
+      if (paymentAmount <= 0 || paymentAmount > (totalAmount - currentAmountPaid)) {
+        return sendResponse(res, 400, 'Montant partiel invalide');
+      }
+    } else {
+      paymentAmount = totalAmount - currentAmountPaid;
     }
 
+    const newAmountPaid = currentAmountPaid + paymentAmount;
+    const newStatus = newAmountPaid >= totalAmount ? 'paye' : 'en_attente';
+
+    // Date et mode de paiement
     const updateDate = payment_date || new Date().toISOString().split('T')[0];
     const updateMode = payment_mode || 'cash';
 
-    // Calculer le nouveau montant payé
-    let newAmountPaid = currentContribution.amount_paid || 0;
-    let newStatus = currentContribution.status;
-    let paymentAmount = 0;
-
-    if (partial_amount && parseFloat(partial_amount) > 0) {
-      // Paiement partiel/avance
-      paymentAmount = parseFloat(partial_amount);
-      newAmountPaid += paymentAmount;
-      
-      // Vérifier que le montant total ne dépasse pas le montant attendu
-      if (newAmountPaid > currentContribution.amount) {
-        return sendResponse(res, 400, 'Le montant total payé ne peut pas dépasser le montant attendu');
-      }
-      
-      // Déterminer le nouveau statut
-      newStatus = newAmountPaid >= currentContribution.amount ? 'paye' : 'en_attente';
-    } else {
-      // Paiement du solde restant
-      paymentAmount = currentContribution.amount - newAmountPaid;
-      newAmountPaid = currentContribution.amount;
-      newStatus = 'paye';
-    }
-
-    // Mettre à jour la cotisation
+    // Mise à jour
     await executeQuery(`
       UPDATE team_member_contributions 
-      SET status = ?, 
+      SET 
+          status = ?,
           amount_paid = ?,
-          payment_date = ?, 
-          payment_mode = ?, 
+          payment_date = CASE 
+            WHEN ? = 'paye' THEN ?
+            ELSE payment_date 
+          END,
+          payment_mode = CASE 
+            WHEN ? = 'paye' THEN ?
+            WHEN COALESCE(payment_mode, '') = '' THEN ?
+            ELSE payment_mode
+          END,
           notes = CASE 
-            WHEN ? IS NOT NULL THEN CONCAT(IFNULL(notes, ''), CASE WHEN notes IS NOT NULL THEN '\n' ELSE '' END, ?) 
+            WHEN ? IS NOT NULL AND notes IS NOT NULL THEN CONCAT(IFNULL(notes, ''), CASE WHEN notes IS NOT NULL THEN '\n' ELSE '' END, ?) 
             ELSE notes 
           END,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `, [newStatus, newAmountPaid, updateDate, updateMode, notes, notes, id]);
+    `, [newStatus, newAmountPaid, newStatus, updateDate, newStatus, updateMode, updateMode, notes, notes, id]);
 
     // Créer une transaction correspondante pour traçabilité
     if (paymentAmount > 0) {
@@ -281,53 +275,51 @@ const markAdherentContributionPaid = async (req, res) => {
     }
 
     const currentContribution = contribution[0];
+    const currentAmountPaid = parseFloat(currentContribution.amount_paid) || 0;
+    const totalAmount = parseFloat(currentContribution.amount);
 
-    // Vérifier les permissions
-    if (currentContribution.status === 'paye' && req.user.role !== 'admin') {
-      return sendResponse(res, 403, 'Seul l\'administrateur peut modifier un paiement déjà effectué');
+    // Calculer le nouveau montant payé
+    let paymentAmount;
+    if (partial_amount) {
+      paymentAmount = parseFloat(partial_amount);
+      if (paymentAmount <= 0 || paymentAmount > (totalAmount - currentAmountPaid)) {
+        return sendResponse(res, 400, 'Montant partiel invalide');
+      }
+    } else {
+      paymentAmount = totalAmount - currentAmountPaid;
     }
 
+    const newAmountPaid = currentAmountPaid + paymentAmount;
+    const newStatus = newAmountPaid >= totalAmount ? 'paye' : 'en_attente';
+
+    // Date et mode de paiement
     const updateDate = payment_date || new Date().toISOString().split('T')[0];
     const updateMode = payment_mode || 'cash';
 
-    // Calculer le nouveau montant payé
-    let newAmountPaid = currentContribution.amount_paid || 0;
-    let newStatus = currentContribution.status;
-    let paymentAmount = 0;
-
-    if (partial_amount && parseFloat(partial_amount) > 0) {
-      // Paiement partiel/avance
-      paymentAmount = parseFloat(partial_amount);
-      newAmountPaid += paymentAmount;
-      
-      if (newAmountPaid > currentContribution.amount) {
-        return sendResponse(res, 400, 'Le montant total payé ne peut pas dépasser le montant attendu');
-      }
-      
-      newStatus = newAmountPaid >= currentContribution.amount ? 'paye' : 'en_attente';
-    } else {
-      // Paiement du solde restant
-      paymentAmount = currentContribution.amount - newAmountPaid;
-      newAmountPaid = currentContribution.amount;
-      newStatus = 'paye';
-    }
-
-    // Mettre à jour l'abonnement
+    // Mise à jour
     await executeQuery(`
       UPDATE adherent_contributions 
-      SET status = ?, 
+      SET 
+          status = ?,
           amount_paid = ?,
-          payment_date = ?, 
-          payment_mode = ?, 
+          payment_date = CASE 
+            WHEN ? = 'paye' THEN ?
+            ELSE payment_date 
+          END,
+          payment_mode = CASE 
+            WHEN ? = 'paye' THEN ?
+            WHEN COALESCE(payment_mode, '') = '' THEN ?
+            ELSE payment_mode
+          END,
           notes = CASE 
-            WHEN ? IS NOT NULL THEN CONCAT(IFNULL(notes, ''), CASE WHEN notes IS NOT NULL THEN '\n' ELSE '' END, ?) 
+            WHEN ? IS NOT NULL AND notes IS NOT NULL THEN CONCAT(IFNULL(notes, ''), CASE WHEN notes IS NOT NULL THEN '\n' ELSE '' END, ?) 
             ELSE notes 
           END,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `, [newStatus, newAmountPaid, updateDate, updateMode, notes, notes, id]);
+    `, [newStatus, newAmountPaid, newStatus, updateDate, newStatus, updateMode, updateMode, notes, notes, id]);
 
-    // Créer une transaction correspondante
+    // Créer une transaction correspondante pour traçabilité
     if (paymentAmount > 0) {
       const transactionDescription = `Abonnement ${new Date(currentContribution.month_year).toLocaleDateString('fr-FR', {month: 'long', year: 'numeric'})} - ${currentContribution.adherent_name}`;
       const reference = `ABN-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
@@ -365,11 +357,11 @@ const markAdherentContributionPaid = async (req, res) => {
   }
 };
 
-// =====================================================
-// RÉCUPÉRATION DES DONNÉES AVEC MONTANTS PAYÉS
-// =====================================================
 
-// Récupérer les cotisations team members par mois (avec support des montants payés)
+// RÉCUPÉRATION DES DONNÉES AVEC MONTANTS PAYÉS
+
+
+// Récupérer les cotisations team members par mois (AVEC gestion non_concerne)
 const getTeamContributions = async (req, res) => {
   try {
     const { year, month } = req.query;
@@ -396,6 +388,7 @@ const getTeamContributions = async (req, res) => {
         (tmc.amount - COALESCE(tmc.amount_paid, 0)) as remaining_amount,
         DATEDIFF(CURDATE(), LAST_DAY(tmc.month_year)) as days_late,
         CASE 
+          WHEN tmc.status = 'non_concerne' THEN 'Non concerné'
           WHEN tmc.status = 'paye' THEN 'Payé complet'
           WHEN COALESCE(tmc.amount_paid, 0) > 0 AND tmc.status = 'en_attente' THEN 'Avance partielle'
           WHEN DATEDIFF(CURDATE(), LAST_DAY(tmc.month_year)) > 0 AND tmc.status = 'en_attente' THEN 'En retard'
@@ -407,14 +400,15 @@ const getTeamContributions = async (req, res) => {
       ORDER BY tmc.month_year DESC, tm.name
     `, queryParams);
 
-    // Statistiques du mois avec montants payés
+    // Statistiques SANS les 'non_concerne'
     const stats = await executeQuery(`
       SELECT 
         COUNT(*) as total_contributions,
         SUM(CASE WHEN status = 'paye' THEN 1 ELSE 0 END) as paid_count,
         SUM(CASE WHEN status = 'en_attente' THEN 1 ELSE 0 END) as pending_count,
+        SUM(CASE WHEN status = 'non_concerne' THEN 1 ELSE 0 END) as non_concerne_count,
         SUM(COALESCE(amount_paid, 0)) as total_collected,
-        SUM(amount) as total_expected,
+        SUM(CASE WHEN status != 'non_concerne' THEN amount ELSE 0 END) as total_expected,
         SUM(CASE WHEN COALESCE(amount_paid, 0) > 0 AND COALESCE(amount_paid, 0) < amount THEN 1 ELSE 0 END) as partial_payments
       FROM team_member_contributions tmc
       ${whereClause}
@@ -439,7 +433,7 @@ const getTeamContributions = async (req, res) => {
   }
 };
 
-// Récupérer les abonnements adhérents par mois (avec support des montants payés)
+// Récupérer les abonnements adhérents par mois (AVEC gestion non_concerne)
 const getAdherentContributions = async (req, res) => {
   try {
     const { year, month } = req.query;
@@ -465,6 +459,7 @@ const getAdherentContributions = async (req, res) => {
         (ac.amount - COALESCE(ac.amount_paid, 0)) as remaining_amount,
         DATEDIFF(CURDATE(), LAST_DAY(ac.month_year)) as days_late,
         CASE 
+          WHEN ac.status = 'non_concerne' THEN 'Non concerné'
           WHEN ac.status = 'paye' THEN 'Payé complet'
           WHEN COALESCE(ac.amount_paid, 0) > 0 AND ac.status = 'en_attente' THEN 'Avance partielle'
           WHEN DATEDIFF(CURDATE(), LAST_DAY(ac.month_year)) > 0 AND ac.status = 'en_attente' THEN 'En retard'
@@ -476,14 +471,15 @@ const getAdherentContributions = async (req, res) => {
       ORDER BY ac.month_year DESC, a.name
     `, queryParams);
 
-    // Statistiques du mois avec montants payés
+    // Statistiques SANS les 'non_concerne'
     const stats = await executeQuery(`
       SELECT 
         COUNT(*) as total_contributions,
         SUM(CASE WHEN status = 'paye' THEN 1 ELSE 0 END) as paid_count,
         SUM(CASE WHEN status = 'en_attente' THEN 1 ELSE 0 END) as pending_count,
+        SUM(CASE WHEN status = 'non_concerne' THEN 1 ELSE 0 END) as non_concerne_count,
         SUM(COALESCE(amount_paid, 0)) as total_collected,
-        SUM(amount) as total_expected,
+        SUM(CASE WHEN status != 'non_concerne' THEN amount ELSE 0 END) as total_expected,
         SUM(CASE WHEN COALESCE(amount_paid, 0) > 0 AND COALESCE(amount_paid, 0) < amount THEN 1 ELSE 0 END) as partial_payments
       FROM adherent_contributions ac
       ${whereClause}
@@ -508,9 +504,9 @@ const getAdherentContributions = async (req, res) => {
   }
 };
 
-// =====================================================
+
 // FONCTIONS UTILITAIRES INTERNES
-// =====================================================
+
 
 const generateTeamContributionsInternal = async (month, year) => {
   const monthYear = `${year}-${month.toString().padStart(2, '0')}-01`;
@@ -580,6 +576,132 @@ const formatAmount = (amount) => {
   return new Intl.NumberFormat('fr-FR').format(amount) + ' FCFA';
 };
 
+
+// SYNCHRONISATION MANUELLE DES COTISATIONS MANQUANTES
+
+
+const syncMissingContributions = async (req, res) => {
+  try {
+    console.log('🔄 Début de la synchronisation des cotisations manquantes...');
+    
+    let totalCreated = 0;
+    const details = {
+      team: { created: 0, members: [] },
+      adherents: { created: 0, members: [] }
+    };
+    
+    // 1. Synchroniser Team Members
+    const generatedTeamMonths = await executeQuery(
+      'SELECT DISTINCT month_year FROM team_member_contributions ORDER BY month_year'
+    );
+    
+    if (generatedTeamMonths.length > 0) {
+      for (const { month_year } of generatedTeamMonths) {
+        const missingTeam = await executeQuery(`
+          SELECT m.id, m.name, m.registration_date
+          FROM team_members m
+          WHERE m.is_active = true
+          AND NOT EXISTS (
+            SELECT 1 FROM team_member_contributions c 
+            WHERE c.team_member_id = m.id AND c.month_year = ?
+          )
+        `, [month_year]);
+        
+        for (const member of missingTeam) {
+          const registrationDateObj = new Date(member.registration_date);
+          const registrationYear = registrationDateObj.getFullYear();
+          const registrationMonth = registrationDateObj.getMonth();
+          
+          const monthYearObj = new Date(month_year);
+          const monthYear_year = monthYearObj.getFullYear();
+          const monthYear_month = monthYearObj.getMonth();
+          
+          let status = 'en_attente';
+          if (monthYear_year < registrationYear || 
+             (monthYear_year === registrationYear && monthYear_month < registrationMonth)) {
+            status = 'non_concerne';
+          }
+          
+          await executeQuery(`
+            INSERT INTO team_member_contributions 
+            (team_member_id, month_year, amount, amount_paid, penalty_amount, status) 
+            VALUES (?, ?, ?, 0, 0, ?)
+          `, [member.id, month_year, DEFAULT_TEAM_CONTRIBUTION, status]);
+          
+          totalCreated++;
+          details.team.created++;
+          details.team.members.push({
+            name: member.name,
+            month: new Date(month_year).toLocaleDateString('fr-FR', {month: 'long', year: 'numeric'}),
+            status
+          });
+        }
+      }
+    }
+    
+    // 2. Synchroniser Adhérents
+    const generatedAdherentMonths = await executeQuery(
+      'SELECT DISTINCT month_year FROM adherent_contributions ORDER BY month_year'
+    );
+    
+    if (generatedAdherentMonths.length > 0) {
+      for (const { month_year } of generatedAdherentMonths) {
+        const missingAdherents = await executeQuery(`
+          SELECT a.id, a.name, a.registration_date
+          FROM adherents a
+          WHERE a.is_active = true
+          AND NOT EXISTS (
+            SELECT 1 FROM adherent_contributions c 
+            WHERE c.adherent_id = a.id AND c.month_year = ?
+          )
+        `, [month_year]);
+        
+        for (const adherent of missingAdherents) {
+          const registrationDateObj = new Date(adherent.registration_date);
+          const registrationYear = registrationDateObj.getFullYear();
+          const registrationMonth = registrationDateObj.getMonth();
+          
+          const monthYearObj = new Date(month_year);
+          const monthYear_year = monthYearObj.getFullYear();
+          const monthYear_month = monthYearObj.getMonth();
+          
+          let status = 'en_attente';
+          if (monthYear_year < registrationYear || 
+             (monthYear_year === registrationYear && monthYear_month < registrationMonth)) {
+            status = 'non_concerne';
+          }
+          
+          await executeQuery(`
+            INSERT INTO adherent_contributions 
+            (adherent_id, month_year, amount, amount_paid, penalty_amount, status) 
+            VALUES (?, ?, ?, 0, 0, ?)
+          `, [adherent.id, month_year, DEFAULT_ADHERENT_CONTRIBUTION, status]);
+          
+          totalCreated++;
+          details.adherents.created++;
+          details.adherents.members.push({
+            name: adherent.name,
+            month: new Date(month_year).toLocaleDateString('fr-FR', {month: 'long', year: 'numeric'}),
+            status
+          });
+        }
+      }
+    }
+    
+    console.log(`✅ Synchronisation terminée : ${totalCreated} cotisations créées`);
+    
+    return sendResponse(res, 200, 'Synchronisation terminée avec succès', {
+      total_created: totalCreated,
+      team_members: details.team,
+      adherents: details.adherents
+    });
+    
+  } catch (error) {
+    console.error('❌ Erreur lors de la synchronisation:', error.message);
+    return sendResponse(res, 500, 'Erreur lors de la synchronisation');
+  }
+};
+
 module.exports = {
   generateTeamContributions,
   generateAdherentContributions,
@@ -588,4 +710,5 @@ module.exports = {
   markAdherentContributionPaid,
   getTeamContributions,
   getAdherentContributions,
+  syncMissingContributions,
 };

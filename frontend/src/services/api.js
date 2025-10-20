@@ -162,6 +162,9 @@ export const contributionAPI = {
   
   markTeamPaid: (id, data) => api.put(`/contributions/team/${id}/pay`, data),
   markAdherentPaid: (id, data) => api.put(`/contributions/adherents/${id}/pay`, data),
+
+  // Synchronisation manuelle
+  syncMissing: () => api.post('/contributions/sync-missing'),
 };
 
 export const dashboardAPI = {

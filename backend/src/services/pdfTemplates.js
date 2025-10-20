@@ -1,6 +1,6 @@
 /*   Projet : InvoAfrica
      @Auteur : NZIKO Felix Andre
-     version : beta 2.0 - PDF Templates COMPLETS */
+     version : beta 2.0  */
 
 const { 
   CLUB_INFO, 
@@ -28,7 +28,7 @@ const {
 } = require('../utils/pdfHelpers');
 
 /**
- * ✅ CORRIGÉ : REÇU DE TRANSACTION (tout sur 1 page, pas de superposition)
+ *   REÇU DE TRANSACTION (tout sur 1 page, pas de superposition)
  */
 async function generateReceiptPDF(doc, transaction) {
   const { colors } = CLUB_INFO;
@@ -242,16 +242,14 @@ async function generateReceiptPDF(doc, transaction) {
     y += 48;
   }
   
-  // ✅ CORRECTION : QR CODE - Positionné intelligemment pour éviter superposition
-  // Calculer l'espace disponible avant le pied de page (qui commence à pageHeight - bottom - 140)
+  //  CORRECTION : QR CODE - Positionné intelligemment pour éviter superposition
   const footerStartY = dimensions.pageHeight - margins.bottom - 140;
   const qrSize = 80;
-  const qrSpaceNeeded = qrSize + 30; // QR + texte en dessous
+  const qrSpaceNeeded = qrSize + 30;
   
-  // Si pas assez d'espace, on positionne le QR plus haut
   let qrY = y;
   if (qrY + qrSpaceNeeded > footerStartY) {
-    qrY = footerStartY - qrSpaceNeeded - 10; // 10px de marge
+    qrY = footerStartY - qrSpaceNeeded - 10;
   }
   
   const qrX = margins.left + 20;
@@ -277,12 +275,12 @@ async function generateReceiptPDF(doc, transaction) {
        });
   }
   
-  // ✅ PIED DE PAGE avec signature (la signature sera positionnée plus haut automatiquement)
+  //  PIED DE PAGE avec signature
   drawFooter(doc, 1, 1, PDF_TEXTS.receipt.footer, ASSETS_PATH.signature);
 }
 
 /**
- * ✅ CORRIGÉ : LISTE DES TRANSACTIONS (avec colonne Description + Membre, signature)
+ *   LISTE DES TRANSACTIONS (avec colonne Description + Membre, signature)
  */
 async function generateTransactionListPDF(doc, transactions, filters, statistics) {
   const { colors } = CLUB_INFO;
@@ -361,12 +359,10 @@ async function generateTransactionListPDF(doc, transactions, filters, statistics
     y += 22;
   }
   
-  // ✅ TABLEAU AVEC COLONNES : Réf, Date, Membre, Description, Catégorie, Montant, Statut
+  //  TABLEAU AVEC COLONNES
   if (transactions.length > 0) {
     const headers = ['Réf.', 'Date', 'Membre', 'Description', 'Catégorie', 'Montant', 'Statut'];
-    
-    // ✅ Largeurs ajustées pour inclure Description + Membre
-    const columnWidths = [45, 50, 70, 100, 65, 65, 50]; // Total = 445
+    const columnWidths = [45, 50, 70, 100, 65, 65, 50];
     
     const rows = transactions.map(t => {
       const memberName = extractMemberName(t);
@@ -385,7 +381,7 @@ async function generateTransactionListPDF(doc, transactions, filters, statistics
     y = drawTable(doc, headers, rows, y, { 
       columnWidths,
       fontSize: fonts.tiny,
-      alignRight: [5] // Colonne "Montant"
+      alignRight: [5]
     });
   } else {
     doc.fontSize(fonts.body)
@@ -397,11 +393,10 @@ async function generateTransactionListPDF(doc, transactions, filters, statistics
        });
   }
   
-  // ✅ PIED DE PAGE AVEC SIGNATURE sur dernière page
+  //  PIED DE PAGE AVEC SIGNATURE sur dernière page
   const range = doc.bufferedPageRange();
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(i);
-    // Signature uniquement sur dernière page
     const signature = (i === range.count - 1) ? ASSETS_PATH.signature : null;
     drawFooter(doc, i + 1, range.count, PDF_TEXTS.transactionList.footer, signature);
   }
@@ -546,7 +541,7 @@ async function generateFinancialReportPDF(doc, data) {
        align: 'left'
      });
   
-  // ✅ PIED DE PAGE avec signature
+  //  PIED DE PAGE avec signature
   const range = doc.bufferedPageRange();
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(i);
@@ -659,7 +654,7 @@ async function generateMemberStatementPDF(doc, member, contributions) {
        });
   }
   
-  // ✅ PIED DE PAGE avec signature
+  //  PIED DE PAGE avec signature
   const range = doc.bufferedPageRange();
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(i);
@@ -668,7 +663,7 @@ async function generateMemberStatementPDF(doc, member, contributions) {
 }
 
 /**
- * ✅ NOUVEAU : LISTE TEAM MEMBERS (avec signature)
+ *   LISTE TEAM MEMBERS (avec signature sans superposition)
  */
 async function generateTeamMembersPDF(doc, teamMembers, filters) {
   const { colors } = CLUB_INFO;
@@ -746,17 +741,26 @@ async function generateTeamMembersPDF(doc, teamMembers, filters) {
     });
   }
   
-  // ✅ PIED DE PAGE AVEC SIGNATURE
+  //  PIED DE PAGE AVEC SIGNATURE
   const range = doc.bufferedPageRange();
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(i);
-    const signature = (i === range.count - 1) ? ASSETS_PATH.signature : null;
+    
+    // Vérifier s'il reste de l'espace pour la signature
+    const currentY = doc.y;
+    const footerStartY = dimensions.pageHeight - margins.bottom - 140;
+    
+    // Si on est sur la dernière page ET qu'il reste de l'espace
+    const signature = (i === range.count - 1 && currentY < footerStartY - 100) 
+      ? ASSETS_PATH.signature 
+      : null;
+    
     drawFooter(doc, i + 1, range.count, 'Document officiel du Club Génie Informatique', signature);
   }
 }
 
 /**
- * ✅ NOUVEAU : LISTE ADHÉRENTS (avec signature)
+ *   LISTE ADHÉRENTS (avec signature sans superposition)
  */
 async function generateAdherentsPDF(doc, adherents, filters) {
   const { colors } = CLUB_INFO;
@@ -834,17 +838,26 @@ async function generateAdherentsPDF(doc, adherents, filters) {
     });
   }
   
-  // ✅ PIED DE PAGE AVEC SIGNATURE
+  //  PIED DE PAGE AVEC SIGNATURE
   const range = doc.bufferedPageRange();
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(i);
-    const signature = (i === range.count - 1) ? ASSETS_PATH.signature : null;
+    
+    // Vérifier s'il reste de l'espace pour la signature
+    const currentY = doc.y;
+    const footerStartY = dimensions.pageHeight - margins.bottom - 140;
+    
+    // Si on est sur la dernière page ET qu'il reste de l'espace
+    const signature = (i === range.count - 1 && currentY < footerStartY - 100) 
+      ? ASSETS_PATH.signature 
+      : null;
+    
     drawFooter(doc, i + 1, range.count, 'Document officiel du Club Génie Informatique', signature);
   }
 }
 
 /**
- * ✅ NOUVEAU : COTISATIONS TEAM MEMBERS (avec signature + filtres payé/non payé)
+ *   COTISATIONS TEAM MEMBERS (avec signature sans superposition)
  */
 async function generateTeamContributionsPDF(doc, contributions, filters) {
   const { colors } = CLUB_INFO;
@@ -930,17 +943,26 @@ async function generateTeamContributionsPDF(doc, contributions, filters) {
     });
   }
   
-  // ✅ PIED DE PAGE AVEC SIGNATURE
+  //  PIED DE PAGE AVEC SIGNATURE
   const range = doc.bufferedPageRange();
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(i);
-    const signature = (i === range.count - 1) ? ASSETS_PATH.signature : null;
+    
+    // Vérifier s'il reste de l'espace pour la signature
+    const currentY = doc.y;
+    const footerStartY = dimensions.pageHeight - margins.bottom - 140;
+    
+    // Si on est sur la dernière page ET qu'il reste de l'espace
+    const signature = (i === range.count - 1 && currentY < footerStartY - 100) 
+      ? ASSETS_PATH.signature 
+      : null;
+    
     drawFooter(doc, i + 1, range.count, 'Document officiel du Club Génie Informatique', signature);
   }
 }
 
 /**
- * ✅ NOUVEAU : ABONNEMENTS ADHÉRENTS (avec signature + filtres payé/non payé)
+ *   ABONNEMENTS ADHÉRENTS (avec signature sans superposition)
  */
 async function generateAdherentContributionsPDF(doc, contributions, filters) {
   const { colors } = CLUB_INFO;
@@ -1026,11 +1048,20 @@ async function generateAdherentContributionsPDF(doc, contributions, filters) {
     });
   }
   
-  // ✅ PIED DE PAGE AVEC SIGNATURE
+  // PIED DE PAGE AVEC SIGNATURE
   const range = doc.bufferedPageRange();
   for (let i = 0; i < range.count; i++) {
     doc.switchToPage(i);
-    const signature = (i === range.count - 1) ? ASSETS_PATH.signature : null;
+    
+    // Vérifier s'il reste de l'espace pour la signature
+    const currentY = doc.y;
+    const footerStartY = dimensions.pageHeight - margins.bottom - 140;
+    
+    // Si on est sur la dernière page ET qu'il reste de l'espace
+    const signature = (i === range.count - 1 && currentY < footerStartY - 100) 
+      ? ASSETS_PATH.signature 
+      : null;
+    
     drawFooter(doc, i + 1, range.count, 'Document officiel du Club Génie Informatique', signature);
   }
 }

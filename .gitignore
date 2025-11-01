@@ -1,0 +1,33 @@
+# Fichiers d'environnement (NE JAMAIS COMMITER)
+.env
+.env.local
+.env.production
+*.env
+!.env.example
+
+# Node modules
+node_modules/
+*/node_modules/
+
+# Fichiers de build
+build/
+dist/
+frontend/build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Uploads
+backend/src/uploads/
+uploads/
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp

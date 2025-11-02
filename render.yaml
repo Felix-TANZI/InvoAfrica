@@ -32,7 +32,6 @@ services:
   - type: web
     name: invoafrica-frontend
     env: static
-    region: frankfurt
     plan: free
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: ./frontend/build

@@ -1,6 +1,6 @@
-/*   Projet : InvoAfrica
+/* Projet : InvoAfrica
      @Auteur : NZIKO Felix Andre
-     version : beta 2.0  */
+     version : beta 2.5 - Templates FINAL (Rapport Financier Fixé) */
 
 const { 
   CLUB_INFO, 
@@ -28,7 +28,27 @@ const {
 } = require('../utils/pdfHelpers');
 
 /**
- *   REÇU DE TRANSACTION (tout sur 1 page, pas de superposition)
+ * LOGIQUE DE PIED DE PAGE ET SIGNATURE DÉDIÉE À LA DERNIÈRE PAGE
+ */
+const finalizeDocument = (doc, footerText) => {
+    const range = doc.bufferedPageRange();
+    const totalPages = range.count;
+    const { ASSETS_PATH } = require('../config/pdfConfig');
+    
+    for (let i = 0; i < totalPages; i++) {
+        doc.switchToPage(i);
+        const isLastPage = (i === totalPages - 1);
+        
+        // La signature n'est incluse que sur la dernière page
+        const signature = isLastPage ? ASSETS_PATH.signature : null;
+        
+        drawFooter(doc, i + 1, totalPages, footerText, signature);
+    }
+}
+
+
+/**
+ * REÇU DE TRANSACTION
  */
 async function generateReceiptPDF(doc, transaction) {
   const { colors } = CLUB_INFO;
@@ -191,7 +211,8 @@ async function generateReceiptPDF(doc, transaction) {
   
   const descBoxWidth = dimensions.pageWidth - margins.left - margins.right - 20;
   const descText = transaction.description || 'Aucune description fournie';
-  const descHeight = Math.max(35, Math.ceil(descText.length / 90) * 16);
+  // Correction: utiliser doc.heightOfString pour déterminer la hauteur
+  const descHeight = Math.max(35, doc.heightOfString(descText, { width: descBoxWidth - 16 }) + 14);
   
   doc.rect(margins.left + 10, y, descBoxWidth, descHeight)
      .fillAndStroke(colors.bgLight, colors.border);
@@ -242,17 +263,16 @@ async function generateReceiptPDF(doc, transaction) {
     y += 48;
   }
   
-  //  CORRECTION : QR CODE - Positionné intelligemment pour éviter superposition
-  const footerStartY = dimensions.pageHeight - margins.bottom - 140;
+  //  QR CODE - Positionné intelligemment
   const qrSize = 80;
-  const qrSpaceNeeded = qrSize + 30;
-  
-  let qrY = y;
-  if (qrY + qrSpaceNeeded > footerStartY) {
-    qrY = footerStartY - qrSpaceNeeded - 10;
-  }
-  
   const qrX = margins.left + 20;
+  let qrY = y;
+  
+  // S'assurer que le QR code ne superpose pas la signature (située à footerY - 100)
+  const footerClearance = dimensions.pageHeight - margins.bottom - 100;
+  if (qrY + qrSize + 20 > footerClearance) {
+     qrY = footerClearance - qrSize - 20;
+  }
   
   const qrData = `${process.env.FRONTEND_URL || 'https://gi-enspy.com'}/verify/${transaction.reference}`;
   const qrCode = await generateQRCode(qrData);
@@ -280,7 +300,7 @@ async function generateReceiptPDF(doc, transaction) {
 }
 
 /**
- *   LISTE DES TRANSACTIONS (avec colonne Description + Membre, signature)
+ * LISTE DES TRANSACTIONS
  */
 async function generateTransactionListPDF(doc, transactions, filters, statistics) {
   const { colors } = CLUB_INFO;
@@ -361,8 +381,9 @@ async function generateTransactionListPDF(doc, transactions, filters, statistics
   
   //  TABLEAU AVEC COLONNES
   if (transactions.length > 0) {
+    // Optimisation de la largeur des colonnes
     const headers = ['Réf.', 'Date', 'Membre', 'Description', 'Catégorie', 'Montant', 'Statut'];
-    const columnWidths = [45, 50, 70, 100, 65, 65, 50];
+    const columnWidths = [45, 55, 90, 110, 60, 65, 70]; // Somme = 495
     
     const rows = transactions.map(t => {
       const memberName = extractMemberName(t);
@@ -370,9 +391,9 @@ async function generateTransactionListPDF(doc, transactions, filters, statistics
       return [
         t.reference,
         formatDate(t.transaction_date, 'short'),
-        truncateText(memberName, 15),
-        truncateText(t.description || '', 22),
-        truncateText(t.category_name || 'N/A', 14),
+        truncateText(memberName, 20), // Troncature ajustée
+        truncateText(t.description || '', 25), // Troncature ajustée
+        truncateText(t.category_name || 'N/A', 15),
         formatAmount(t.amount),
         getStatusLabel(t.status).text
       ];
@@ -381,7 +402,8 @@ async function generateTransactionListPDF(doc, transactions, filters, statistics
     y = drawTable(doc, headers, rows, y, { 
       columnWidths,
       fontSize: fonts.tiny,
-      alignRight: [5]
+      alignRight: [5], // Montant
+      rowHeightAuto: true
     });
   } else {
     doc.fontSize(fonts.body)
@@ -394,16 +416,11 @@ async function generateTransactionListPDF(doc, transactions, filters, statistics
   }
   
   //  PIED DE PAGE AVEC SIGNATURE sur dernière page
-  const range = doc.bufferedPageRange();
-  for (let i = 0; i < range.count; i++) {
-    doc.switchToPage(i);
-    const signature = (i === range.count - 1) ? ASSETS_PATH.signature : null;
-    drawFooter(doc, i + 1, range.count, PDF_TEXTS.transactionList.footer, signature);
-  }
+  finalizeDocument(doc, PDF_TEXTS.transactionList.footer);
 }
 
 /**
- * TEMPLATE: RAPPORT FINANCIER (avec signature)
+ * TEMPLATE: RAPPORT FINANCIER (VISUEL AMÉLIORÉ et symboles corrigés)
  */
 async function generateFinancialReportPDF(doc, data) {
   const { colors } = CLUB_INFO;
@@ -419,102 +436,121 @@ async function generateFinancialReportPDF(doc, data) {
     ASSETS_PATH.logo
   );
   
-  // RÉSUMÉ FINANCIER - 3 Encadrés
-  const boxWidth = (dimensions.pageWidth - margins.left - margins.right - 40) / 3;
-  let boxX = margins.left;
-  const boxY = y;
-  const boxHeight = 85;
+  // NOUVEAU: TABLEAU RÉCAPITULATIF SOLDE INITIAL/FINAL (Priorité si les données sont fournies)
+  if (data.soldeInitial !== undefined && data.soldeFinal !== undefined) {
+      const summaryInfo = {
+          'Solde Initial (Début période)': formatAmount(data.soldeInitial || 0),
+          'Total Recettes': formatAmount(data.totalRecettes || 0),
+          'Total Dépenses': formatAmount(data.totalDepenses || 0),
+          'Solde Final (Fin période)': formatAmount(data.soldeFinal || (data.soldeInitial + data.totalRecettes - data.totalDepenses) || 0)
+      };
+
+      y = drawInfoSection(doc, 'RÉSUMÉ DE LA PÉRIODE', summaryInfo, y, {
+          bordered: true,
+          bgColor: colors.bgLight,
+          keyColor: colors.text
+      });
+      y -= 15;
+  } else {
+    // Ancien format d'encadrés si les données initiales/finales ne sont pas là
+    
+    // RÉSUMÉ FINCIER - 3 Encadrés (Correction des symboles bizarres)
+    const boxWidth = (dimensions.pageWidth - margins.left - margins.right - 40) / 3;
+    let boxX = margins.left;
+    const boxY = y;
+    const boxHeight = 85;
+    
+    const financialBoxes = [
+      {
+        label: 'RECETTES',
+        value: formatAmount(data.totalRecettes || 0),
+        color: colors.success
+      },
+      {
+        label: 'DÉPENSES',
+        value: formatAmount(data.totalDepenses || 0),
+        color: colors.danger
+      },
+      {
+        label: 'SOLDE NET',
+        value: formatAmount((data.totalRecettes || 0) - (data.totalDepenses || 0)),
+        color: (data.totalRecettes - data.totalDepenses) >= 0 ? colors.success : colors.danger
+      }
+    ];
+
+    financialBoxes.forEach((box) => {
+        doc.rect(boxX, boxY, boxWidth, boxHeight)
+        .fill(colors.bgLight);
+        
+        doc.rect(boxX, boxY, 5, boxHeight) // Barre de couleur
+        .fill(box.color);
+        
+        doc.rect(boxX, boxY, boxWidth, boxHeight)
+        .stroke(colors.border);
+        
+        doc.fontSize(fonts.small)
+        .fillColor(colors.textLight)
+        .font('Helvetica')
+        .text(box.label, boxX + 15, boxY + 15, {
+            width: boxWidth - 20,
+            align: 'center'
+        });
+        
+        // La valeur est centrée verticalement
+        doc.fontSize(fonts.heading)
+        .fillColor(box.color)
+        .font('Helvetica-Bold')
+        .text(box.value, boxX + 15, boxY + 35, { 
+            width: boxWidth - 20,
+            align: 'center'
+        });
+        
+        boxX += boxWidth + 20;
+    });
+
+    y = boxY + boxHeight + 30;
+
+  } // Fin du bloc de résumé financier
   
-  const financialBoxes = [
-    {
-      label: 'RECETTES',
-      value: formatAmount(data.totalRecettes || 0),
-      color: colors.success,
-      icon: '↗'
-    },
-    {
-      label: 'DÉPENSES',
-      value: formatAmount(data.totalDepenses || 0),
-      color: colors.danger,
-      icon: '↘'
-    },
-    {
-      label: 'SOLDE NET',
-      value: formatAmount((data.totalRecettes || 0) - (data.totalDepenses || 0)),
-      color: (data.totalRecettes - data.totalDepenses) >= 0 ? colors.success : colors.danger,
-      icon: '='
-    }
-  ];
-  
-  financialBoxes.forEach((box) => {
-    doc.rect(boxX, boxY, boxWidth, boxHeight)
-       .fill(colors.bgLight);
-    
-    doc.rect(boxX, boxY, 5, boxHeight)
-       .fill(box.color);
-    
-    doc.rect(boxX, boxY, boxWidth, boxHeight)
-       .stroke(colors.border);
-    
-    doc.fontSize(fonts.small)
-       .fillColor(colors.textLight)
-       .font('Helvetica')
-       .text(box.label, boxX + 15, boxY + 15, {
-         width: boxWidth - 20,
-         align: 'center'
-       });
-    
-    doc.fontSize(24)
-       .fillColor(box.color)
-       .font('Helvetica-Bold')
-       .text(box.icon, boxX + 15, boxY + 35, {
-         width: boxWidth - 20,
-         align: 'center'
-       });
-    
-    doc.fontSize(fonts.heading)
-       .text(box.value, boxX + 15, boxY + 55, {
-         width: boxWidth - 20,
-         align: 'center'
-       });
-    
-    boxX += boxWidth + 20;
-  });
-  
-  y = boxY + boxHeight + 30;
   
   // RÉPARTITION PAR CATÉGORIE
   if (data.byCategory && data.byCategory.length > 0) {
     doc.fontSize(fonts.subheading)
        .fillColor(colors.primary)
        .font('Helvetica-Bold')
-       .text('Répartition par Catégorie', margins.left, y);
+       .text('ANALYSE DÉTAILLÉE PAR CATÉGORIE', margins.left, y); // Titre amélioré
     
     y += 25;
     
     const headers = ['Catégorie', 'Type', 'Nb Trans.', 'Montant Total', '% du Total'];
-    const columnWidths = [165, 75, 75, 90, 70];
+    const columnWidths = [185, 75, 75, 90, 70]; // Somme = 495
     
-    const grandTotal = data.byCategory.reduce((sum, cat) => 
-      sum + parseFloat(cat.total_amount || 0), 0
-    );
-    
+    // Pourcentage est calculé par rapport au total de Recettes ou Dépenses
+    const totalRecettes = data.totalRecettes || 0;
+    const totalDepenses = data.totalDepenses || 0;
+
     const rows = data.byCategory.map(cat => {
       const amount = parseFloat(cat.total_amount || 0);
-      const percentage = grandTotal > 0 ? ((amount / grandTotal) * 100).toFixed(1) : '0';
+      const percentageBase = cat.category_type === 'recette' ? totalRecettes : totalDepenses;
+      
+      let percentage = 0;
+      if (percentageBase > 0) {
+          percentage = (amount / percentageBase) * 100;
+      }
       
       return [
-        cat.category_name,
+        truncateText(cat.category_name, 25),
         getTypeLabel(cat.category_type).text,
         String(cat.transaction_count || 0),
         formatAmount(amount),
-        `${percentage}%`
+        `${percentage.toFixed(1)}%`
       ];
     });
     
     y = drawTable(doc, headers, rows, y, {
       columnWidths,
-      alignRight: [2, 3, 4]
+      alignRight: [2, 3, 4], // Nb Trans., Montant Total, % du Total
+      rowHeightAuto: true
     });
   }
   
@@ -542,15 +578,12 @@ async function generateFinancialReportPDF(doc, data) {
      });
   
   //  PIED DE PAGE avec signature
-  const range = doc.bufferedPageRange();
-  for (let i = 0; i < range.count; i++) {
-    doc.switchToPage(i);
-    drawFooter(doc, i + 1, range.count, PDF_TEXTS.financialReport.footer, ASSETS_PATH.signature);
-  }
+  finalizeDocument(doc, PDF_TEXTS.financialReport.footer);
 }
 
+
 /**
- * TEMPLATE: RELEVÉ MEMBRE (avec signature)
+ * TEMPLATE: RELEVÉ MEMBRE 
  */
 async function generateMemberStatementPDF(doc, member, contributions) {
   const { colors } = CLUB_INFO;
@@ -626,7 +659,7 @@ async function generateMemberStatementPDF(doc, member, contributions) {
     y += 20;
     
     const headers = ['Date d\'échéance', 'Type', 'Montant', 'Statut', 'Référence'];
-    const columnWidths = [100, 140, 90, 80, 115];
+    const columnWidths = [100, 110, 90, 80, 115]; // Somme = 495
     
     const rows = contributions.map(c => {
       const status = c.status === 'paid' ? 'Payée' : 'En attente';
@@ -642,7 +675,8 @@ async function generateMemberStatementPDF(doc, member, contributions) {
     
     y = drawTable(doc, headers, rows, y, {
       columnWidths,
-      alignRight: [2]
+      alignRight: [2], // Montant
+      rowHeightAuto: true
     });
   } else {
     doc.fontSize(fonts.body)
@@ -655,15 +689,11 @@ async function generateMemberStatementPDF(doc, member, contributions) {
   }
   
   //  PIED DE PAGE avec signature
-  const range = doc.bufferedPageRange();
-  for (let i = 0; i < range.count; i++) {
-    doc.switchToPage(i);
-    drawFooter(doc, i + 1, range.count, PDF_TEXTS.memberStatement.footer, ASSETS_PATH.signature);
-  }
+  finalizeDocument(doc, PDF_TEXTS.memberStatement.footer);
 }
 
 /**
- *   LISTE TEAM MEMBERS (avec signature sans superposition)
+ * LISTE TEAM MEMBERS
  */
 async function generateTeamMembersPDF(doc, teamMembers, filters) {
   const { colors } = CLUB_INFO;
@@ -717,8 +747,9 @@ async function generateTeamMembersPDF(doc, teamMembers, filters) {
   
   // TABLEAU
   if (teamMembers.length > 0) {
+    // Optimisation de la largeur des colonnes
     const headers = ['ID', 'Nom', 'Position', 'Email', 'Cotisation', 'Statut'];
-    const columnWidths = [30, 110, 95, 120, 70, 50];
+    const columnWidths = [30, 120, 105, 120, 70, 50]; // Somme = 495
     
     const rows = teamMembers.map(m => {
       const contributionStatus = m.contribution_status === 'paye' ? '✓ Payée' : 
@@ -727,9 +758,9 @@ async function generateTeamMembersPDF(doc, teamMembers, filters) {
       
       return [
         String(m.id),
-        truncateText(m.name, 24),
-        truncateText(m.position || '-', 20),
-        truncateText(m.email || '-', 26),
+        truncateText(m.name, 28),
+        truncateText(m.position || '-', 25),
+        truncateText(m.email || '-', 28),
         contributionStatus,
         m.is_active ? 'Actif' : 'Inactif'
       ];
@@ -737,30 +768,25 @@ async function generateTeamMembersPDF(doc, teamMembers, filters) {
     
     y = drawTable(doc, headers, rows, y, {
       columnWidths,
-      fontSize: fonts.tiny
+      fontSize: fonts.tiny,
+      rowHeightAuto: true // Force le multi-lignes pour les noms et positions
     });
+  } else {
+    doc.fontSize(fonts.body)
+       .fillColor(colors.textLight)
+       .font('Helvetica-Oblique')
+       .text('Aucun Team Member trouvé pour les critères sélectionnés', margins.left, y, {
+         width: dimensions.pageWidth - margins.left - margins.right,
+         align: 'center'
+       });
   }
   
-  //  PIED DE PAGE AVEC SIGNATURE
-  const range = doc.bufferedPageRange();
-  for (let i = 0; i < range.count; i++) {
-    doc.switchToPage(i);
-    
-    // Vérifier s'il reste de l'espace pour la signature
-    const currentY = doc.y;
-    const footerStartY = dimensions.pageHeight - margins.bottom - 140;
-    
-    // Si on est sur la dernière page ET qu'il reste de l'espace
-    const signature = (i === range.count - 1 && currentY < footerStartY - 100) 
-      ? ASSETS_PATH.signature 
-      : null;
-    
-    drawFooter(doc, i + 1, range.count, 'Document officiel du Club Génie Informatique', signature);
-  }
+  //  PIED DE PAGE AVEC SIGNATURE 
+  finalizeDocument(doc, 'Document officiel du Club Génie Informatique');
 }
 
 /**
- *   LISTE ADHÉRENTS (avec signature sans superposition)
+ * LISTE ADHÉRENTS
  */
 async function generateAdherentsPDF(doc, adherents, filters) {
   const { colors } = CLUB_INFO;
@@ -814,8 +840,9 @@ async function generateAdherentsPDF(doc, adherents, filters) {
   
   // TABLEAU
   if (adherents.length > 0) {
+    // Optimisation de la largeur des colonnes
     const headers = ['ID', 'Nom', 'Email', 'Téléphone', 'Abonnement', 'Statut'];
-    const columnWidths = [30, 120, 120, 80, 75, 50];
+    const columnWidths = [30, 130, 130, 80, 75, 50]; // Somme = 495
     
     const rows = adherents.map(a => {
       const subscriptionStatus = a.subscription_status === 'paye' ? '✓ Payé' : 
@@ -824,8 +851,8 @@ async function generateAdherentsPDF(doc, adherents, filters) {
       
       return [
         String(a.id),
-        truncateText(a.name, 26),
-        truncateText(a.email || '-', 26),
+        truncateText(a.name, 30),
+        truncateText(a.email || '-', 30),
         truncateText(a.phone || '-', 18),
         subscriptionStatus,
         a.is_active ? 'Actif' : 'Inactif'
@@ -834,30 +861,25 @@ async function generateAdherentsPDF(doc, adherents, filters) {
     
     y = drawTable(doc, headers, rows, y, {
       columnWidths,
-      fontSize: fonts.tiny
+      fontSize: fonts.tiny,
+      rowHeightAuto: true
     });
+  } else {
+    doc.fontSize(fonts.body)
+       .fillColor(colors.textLight)
+       .font('Helvetica-Oblique')
+       .text('Aucun Adhérent trouvé pour les critères sélectionnés', margins.left, y, {
+         width: dimensions.pageWidth - margins.left - margins.right,
+         align: 'center'
+       });
   }
   
-  //  PIED DE PAGE AVEC SIGNATURE
-  const range = doc.bufferedPageRange();
-  for (let i = 0; i < range.count; i++) {
-    doc.switchToPage(i);
-    
-    // Vérifier s'il reste de l'espace pour la signature
-    const currentY = doc.y;
-    const footerStartY = dimensions.pageHeight - margins.bottom - 140;
-    
-    // Si on est sur la dernière page ET qu'il reste de l'espace
-    const signature = (i === range.count - 1 && currentY < footerStartY - 100) 
-      ? ASSETS_PATH.signature 
-      : null;
-    
-    drawFooter(doc, i + 1, range.count, 'Document officiel du Club Génie Informatique', signature);
-  }
+  //  PIED DE PAGE AVEC SIGNATURE 
+  finalizeDocument(doc, 'Document officiel du Club Génie Informatique');
 }
 
 /**
- *   COTISATIONS TEAM MEMBERS (avec signature sans superposition)
+ * COTISATIONS TEAM MEMBERS (Statistiques corrigées)
  */
 async function generateTeamContributionsPDF(doc, contributions, filters) {
   const { colors } = CLUB_INFO;
@@ -879,13 +901,16 @@ async function generateTeamContributionsPDF(doc, contributions, filters) {
     ASSETS_PATH.logo
   );
   
-  // STATISTIQUES
+  // STATISTIQUES (CALCULS CORRIGÉS)
+  const totalCount = contributions.length; 
   const paidCount = contributions.filter(c => c.status === 'paye').length;
-  const totalPaid = contributions.reduce((sum, c) => sum + (c.amount_paid || 0), 0);
-  const totalExpected = contributions.reduce((sum, c) => sum + (c.amount || 0), 0);
+  
+  // Utiliser reduce() pour sommer les montants réels
+  const totalPaid = contributions.reduce((sum, c) => sum + parseFloat(c.amount_paid || 0), 0);
+  const totalExpected = contributions.reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
   
   const statsItems = [
-    { label: 'Total Membres', value: String(contributions.length), color: colors.text },
+    { label: 'Total Membres', value: String(totalCount), color: colors.text },
     { label: 'Payés', value: String(paidCount), color: colors.success },
     { label: 'Collecté', value: formatAmount(totalPaid), color: colors.info },
     { label: 'Attendu', value: formatAmount(totalExpected), color: colors.warning }
@@ -909,7 +934,7 @@ async function generateTeamContributionsPDF(doc, contributions, filters) {
     doc.fontSize(fonts.small)
        .fillColor(colors.textLight)
        .font('Helvetica-Oblique')
-       .text(`${activeFilters.join(' • ')}`, margins.left, y, { 
+       .text(`Filtres: ${activeFilters.join(' • ')}`, margins.left, y, { 
          width: dimensions.pageWidth - margins.left - margins.right
        });
     y += 22;
@@ -917,8 +942,9 @@ async function generateTeamContributionsPDF(doc, contributions, filters) {
   
   // TABLEAU
   if (contributions.length > 0) {
+    // Optimisation de la largeur des colonnes
     const headers = ['Membre', 'Position', 'Montant', 'Payé', 'Reste', 'Statut'];
-    const columnWidths = [130, 100, 70, 70, 70, 60];
+    const columnWidths = [140, 95, 70, 70, 60, 60]; // Somme = 495
     
     const rows = contributions.map(c => {
       const remaining = (c.amount || 0) - (c.amount_paid || 0);
@@ -927,8 +953,8 @@ async function generateTeamContributionsPDF(doc, contributions, filters) {
                      '✗ En attente';
       
       return [
-        truncateText(c.member_name || '-', 28),
-        truncateText(c.position || '-', 22),
+        truncateText(c.member_name || '-', 30),
+        truncateText(c.position || '-', 25),
         formatAmount(c.amount),
         formatAmount(c.amount_paid || 0),
         formatAmount(remaining),
@@ -939,30 +965,25 @@ async function generateTeamContributionsPDF(doc, contributions, filters) {
     y = drawTable(doc, headers, rows, y, {
       columnWidths,
       fontSize: fonts.tiny,
-      alignRight: [2, 3, 4]
+      alignRight: [2, 3, 4], // Montant, Payé, Reste
+      rowHeightAuto: true // Force le multi-lignes
     });
+  } else {
+    doc.fontSize(fonts.body)
+       .fillColor(colors.textLight)
+       .font('Helvetica-Oblique')
+       .text('Aucune Cotisation Team Member trouvée pour les critères sélectionnés', margins.left, y, {
+         width: dimensions.pageWidth - margins.left - margins.right,
+         align: 'center'
+       });
   }
   
-  //  PIED DE PAGE AVEC SIGNATURE
-  const range = doc.bufferedPageRange();
-  for (let i = 0; i < range.count; i++) {
-    doc.switchToPage(i);
-    
-    // Vérifier s'il reste de l'espace pour la signature
-    const currentY = doc.y;
-    const footerStartY = dimensions.pageHeight - margins.bottom - 140;
-    
-    // Si on est sur la dernière page ET qu'il reste de l'espace
-    const signature = (i === range.count - 1 && currentY < footerStartY - 100) 
-      ? ASSETS_PATH.signature 
-      : null;
-    
-    drawFooter(doc, i + 1, range.count, 'Document officiel du Club Génie Informatique', signature);
-  }
+  //  PIED DE PAGE AVEC SIGNATURE 
+  finalizeDocument(doc, 'Document officiel du Club Génie Informatique');
 }
 
 /**
- *   ABONNEMENTS ADHÉRENTS (avec signature sans superposition)
+ * ABONNEMENTS ADHÉRENTS (Statistiques corrigées)
  */
 async function generateAdherentContributionsPDF(doc, contributions, filters) {
   const { colors } = CLUB_INFO;
@@ -984,13 +1005,16 @@ async function generateAdherentContributionsPDF(doc, contributions, filters) {
     ASSETS_PATH.logo
   );
   
-  // STATISTIQUES
+  // STATISTIQUES (CALCULS CORRIGÉS)
+  const totalCount = contributions.length;
   const paidCount = contributions.filter(c => c.status === 'paye').length;
-  const totalPaid = contributions.reduce((sum, c) => sum + (c.amount_paid || 0), 0);
-  const totalExpected = contributions.reduce((sum, c) => sum + (c.amount || 0), 0);
+  
+  // Utiliser reduce() pour sommer les montants réels
+  const totalPaid = contributions.reduce((sum, c) => sum + parseFloat(c.amount_paid || 0), 0);
+  const totalExpected = contributions.reduce((sum, c) => sum + parseFloat(c.amount || 0), 0);
   
   const statsItems = [
-    { label: 'Total Adhérents', value: String(contributions.length), color: colors.text },
+    { label: 'Total Adhérents', value: String(totalCount), color: colors.text },
     { label: 'Payés', value: String(paidCount), color: colors.success },
     { label: 'Collecté', value: formatAmount(totalPaid), color: colors.info },
     { label: 'Attendu', value: formatAmount(totalExpected), color: colors.warning }
@@ -1022,8 +1046,9 @@ async function generateAdherentContributionsPDF(doc, contributions, filters) {
   
   // TABLEAU
   if (contributions.length > 0) {
+    // Optimisation de la largeur des colonnes
     const headers = ['Adhérent', 'Email', 'Montant', 'Payé', 'Reste', 'Statut'];
-    const columnWidths = [130, 130, 70, 70, 60, 60];
+    const columnWidths = [140, 140, 60, 60, 55, 40]; // Somme = 495
     
     const rows = contributions.map(c => {
       const remaining = (c.amount || 0) - (c.amount_paid || 0);
@@ -1032,8 +1057,8 @@ async function generateAdherentContributionsPDF(doc, contributions, filters) {
                      '✗ En attente';
       
       return [
-        truncateText(c.adherent_name || '-', 28),
-        truncateText(c.adherent_email || '-', 28),
+        truncateText(c.adherent_name || '-', 30),
+        truncateText(c.adherent_email || '-', 30),
         formatAmount(c.amount),
         formatAmount(c.amount_paid || 0),
         formatAmount(remaining),
@@ -1044,26 +1069,21 @@ async function generateAdherentContributionsPDF(doc, contributions, filters) {
     y = drawTable(doc, headers, rows, y, {
       columnWidths,
       fontSize: fonts.tiny,
-      alignRight: [2, 3, 4]
+      alignRight: [2, 3, 4], // Montant, Payé, Reste
+      rowHeightAuto: true
     });
+  } else {
+    doc.fontSize(fonts.body)
+       .fillColor(colors.textLight)
+       .font('Helvetica-Oblique')
+       .text('Aucun Abonnement Adhérent trouvé pour les critères sélectionnés', margins.left, y, {
+         width: dimensions.pageWidth - margins.left - margins.right,
+         align: 'center'
+       });
   }
   
-  // PIED DE PAGE AVEC SIGNATURE
-  const range = doc.bufferedPageRange();
-  for (let i = 0; i < range.count; i++) {
-    doc.switchToPage(i);
-    
-    // Vérifier s'il reste de l'espace pour la signature
-    const currentY = doc.y;
-    const footerStartY = dimensions.pageHeight - margins.bottom - 140;
-    
-    // Si on est sur la dernière page ET qu'il reste de l'espace
-    const signature = (i === range.count - 1 && currentY < footerStartY - 100) 
-      ? ASSETS_PATH.signature 
-      : null;
-    
-    drawFooter(doc, i + 1, range.count, 'Document officiel du Club Génie Informatique', signature);
-  }
+  // PIED DE PAGE AVEC SIGNATURE 
+  finalizeDocument(doc, 'Document officiel du Club Génie Informatique');
 }
 
 module.exports = {

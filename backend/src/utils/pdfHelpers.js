@@ -1,608 +1,501 @@
-/*   Projet : InvoAfrica
+/* Projet : InvoAfrica
      @Auteur : NZIKO Felix Andre
-     version : beta 2.0 - PDF Helpers CORRIGÉ */
+     version : beta 2.5 - PDF Helpers FINAL (Esthétique Corrigée) */
 
 const QRCode = require('qrcode');
 const fs = require('fs');
 const { CLUB_INFO, PDF_CONFIG, PDF_TEXTS } = require('../config/pdfConfig');
+const moment = require('moment'); 
+moment.locale('fr');
 
 /**
  * FORMATAGE DES MONTANTS 
  */
 const formatAmount = (amount) => {
-  const numAmount = typeof amount === 'string' ? parseFloat(amount.replace(/\s/g, '')) : amount;
+  const numAmount = typeof amount === 'string' ? parseFloat(String(amount).replace(/[\s,]/g, '')) : amount;
   if (isNaN(numAmount)) return '0 FCFA';
   return new Intl.NumberFormat('fr-FR', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
     useGrouping: true
-  }).format(Math.round(numAmount)).replace(/\s/g, ' ') + ' FCFA';
+  }).format(Math.round(numAmount)).replace(/[\s,]/g, ' ') + ' FCFA';
 };
 
 /**
- * Formater une date
+ * Formater une date (Utilisation de moment.js)
  */
 const formatDate = (date, format = 'full') => {
   if (!date) return 'N/A';
-  const d = new Date(date);
-  if (isNaN(d.getTime())) return 'Date invalide';
   
-  const options = {
-    full: { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' },
-    short: { year: 'numeric', month: '2-digit', day: '2-digit' },
-    medium: { year: 'numeric', month: 'long', day: 'numeric' },
-    time: { hour: '2-digit', minute: '2-digit', second: '2-digit' },
-    datetime: { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }
-  };
-  
-  return d.toLocaleDateString('fr-FR', options[format] || options.full);
+  const m = moment(date);
+  if (!m.isValid()) return 'Date invalide';
+
+  switch (format) {
+    case 'full':
+      return m.format('dddd D MMMM YYYY');
+    case 'short':
+      return m.format('DD/MM/YYYY');
+    case 'medium':
+      return m.format('D MMMM YYYY');
+    case 'fullDateWithTime':
+      return m.format('DD/MM/YYYY à HH:mm:ss');
+    default:
+      return m.format('DD/MM/YYYY');
+  }
 };
 
 /**
- * GÉNÉRATION QR CODE
+ * Générer un QR Code en Base64
  */
-const generateQRCode = async (data) => {
+const generateQRCode = async (text) => {
   try {
-    const qrDataURL = await QRCode.toDataURL(data, {
-      width: PDF_CONFIG.dimensions.qrCodeSize * 3,
-      margin: 2,
-      errorCorrectionLevel: 'M',
-      color: {
-        dark: CLUB_INFO.colors.primary,
-        light: '#FFFFFF'
-      }
-    });
-    return qrDataURL;
-  } catch (error) {
-    console.error('❌ Erreur génération QR Code:', error);
+    return await QRCode.toDataURL(text);
+  } catch (err) {
+    console.error('Erreur de génération de QR Code', err);
     return null;
   }
 };
 
 /**
- * ✅ AMÉLIORATION : Extraire le nom du membre (gestion intelligente)
- */
-const extractMemberName = (transaction) => {
-  // Priorité 1 : contact_person
-  if (transaction.contact_person) {
-    return transaction.contact_person.trim();
-  }
-  
-  // Priorité 2 : Extraire depuis description (format "Type mois année - NOM Prénom")
-  if (transaction.description) {
-    const parts = transaction.description.split(' - ');
-    if (parts.length > 1) {
-      return parts[parts.length - 1].trim();
-    }
-  }
-  
-  // Priorité 3 : member_name si disponible
-  if (transaction.member_name) {
-    return transaction.member_name.trim();
-  }
-  
-  return '-';
-};
-
-/**
- * ✅ AMÉLIORATION : Tronquer intelligemment (avec retour à la ligne)
- */
-const truncateText = (text, maxLength, addEllipsis = true) => {
-  if (!text) return '';
-  const str = String(text);
-  if (str.length <= maxLength) return str;
-  
-  if (addEllipsis) {
-    return str.substring(0, maxLength - 3) + '...';
-  }
-  return str.substring(0, maxLength);
-};
-
-/**
- * ✅ NOUVEAU : Wrapper de texte automatique (retour à la ligne)
- */
-const wrapText = (doc, text, x, y, maxWidth, lineHeight = 12) => {
-  const words = String(text).split(' ');
-  let line = '';
-  let currentY = y;
-  
-  words.forEach((word, index) => {
-    const testLine = line + word + ' ';
-    const testWidth = doc.widthOfString(testLine);
-    
-    if (testWidth > maxWidth && index > 0) {
-      doc.text(line, x, currentY);
-      line = word + ' ';
-      currentY += lineHeight;
-    } else {
-      line = testLine;
-    }
-  });
-  
-  doc.text(line, x, currentY);
-  return currentY + lineHeight;
-};
-
-/**
- * EN-TÊTE MODERNISÉ
+ * Dessiner l'en-tête du document
  */
 const drawHeader = (doc, title, subtitle, logoPath) => {
-  const { colors } = CLUB_INFO;
   const { margins, fonts, dimensions } = PDF_CONFIG;
+  const { colors, name, address, addressLine2, phone, email, website } = CLUB_INFO;
   
-  let y = margins.top;
+  const logoWidth = dimensions.logoWidth || 70;
+  const infoX = dimensions.pageWidth - margins.right;
+  const infoWidth = 200; 
+  const headerYStart = margins.top - 50;
   
-  // Bande bleue en haut
-  doc.rect(0, 0, dimensions.pageWidth, 50)
-     .fill(colors.primary);
+  // LOGO (colonne de gauche)
+  try {
+      if (logoPath && fs.existsSync(logoPath)) {
+        doc.image(logoPath, margins.left, headerYStart, {
+          width: logoWidth
+        });
+      }
+  } catch(e) { /* Gérer l'erreur si l'image est introuvable */ }
   
-  // Rectangle blanc pour le logo
-  doc.rect(margins.left - 5, y - 15, dimensions.logoWidth + 10, dimensions.logoHeight + 10)
-     .fillAndStroke('#FFFFFF', colors.border);
-  
-  // Logo
-  if (fs.existsSync(logoPath)) {
-    try {
-      doc.image(logoPath, margins.left, y - 10, {
-        width: dimensions.logoWidth,
-        height: dimensions.logoHeight,
-        fit: [dimensions.logoWidth, dimensions.logoHeight]
-      });
-    } catch (error) {
-      console.warn('⚠️ Logo introuvable:', error.message);
-    }
-  }
-  
-  // Informations du club à droite
-  const rightX = dimensions.pageWidth - margins.right;
-  const infoX = margins.left + dimensions.logoWidth + 30;
-  const infoWidth = rightX - infoX;
-  
-  doc.fontSize(fonts.heading)
-     .fillColor(colors.text)
-     .font('Helvetica-Bold')
-     .text(CLUB_INFO.name, infoX, y, { width: infoWidth, align: 'right' });
-  
-  y += 20;
+  // INFORMATIONS DU CLUB (colonne de droite - Alignement à droite)
   doc.fontSize(fonts.small)
-     .fillColor(colors.textLight)
-     .font('Helvetica')
-     .text(CLUB_INFO.address, infoX, y, { width: infoWidth, align: 'right' });
-  
-  y += 12;
-  doc.text(CLUB_INFO.addressLine2, infoX, y, { width: infoWidth, align: 'right' });
-  
-  y += 12;
-  doc.fontSize(fonts.tiny)
-     .text(`Tel: ${CLUB_INFO.phone}`, infoX, y, { width: infoWidth, align: 'right' });
-  
-  y += 10;
-  doc.text(`Email: ${CLUB_INFO.email}`, infoX, y, { width: infoWidth, align: 'right' });
-  
-  y += 10;
-  doc.fillColor(colors.primary)
-     .fontSize(fonts.small)
-     .text(`Web: ${CLUB_INFO.website}`, infoX, y, {
-       width: infoWidth,
-       align: 'right',
-       link: `https://${CLUB_INFO.website}`,
-       underline: true
-     });
-  
-  // Double ligne séparatrice
-  y = margins.top + dimensions.logoHeight + 15;
-  
-  doc.moveTo(margins.left, y)
-     .lineTo(dimensions.pageWidth - margins.right, y)
-     .strokeColor(colors.primary)
-     .lineWidth(2)
-     .stroke();
-  
-  doc.moveTo(margins.left, y + 3)
-     .lineTo(dimensions.pageWidth - margins.right, y + 3)
-     .strokeColor(colors.primaryLight)
-     .lineWidth(1)
-     .stroke();
-  
-  // Titre du document
-  y += 25;
-  const titleBoxY = y;
-  const titleBoxHeight = subtitle ? 60 : 40;
-  
-  doc.rect(margins.left, titleBoxY, dimensions.pageWidth - margins.left - margins.right, titleBoxHeight)
-     .fill(colors.bgBlueLight);
-  
-  y += 15;
-  doc.fontSize(fonts.title)
      .fillColor(colors.primary)
      .font('Helvetica-Bold')
-     .text(title, margins.left, y, {
-       width: dimensions.pageWidth - margins.left - margins.right,
-       align: 'center'
-     });
-  
-  if (subtitle) {
-    y += 28;
-    doc.fontSize(fonts.body)
-       .fillColor(colors.textLight)
-       .font('Helvetica')
-       .text(subtitle, margins.left, y, {
-         width: dimensions.pageWidth - margins.left - margins.right,
-         align: 'center'
-       });
-  }
-  
-  return titleBoxY + titleBoxHeight + 20;
-};
+     .text(name, infoX - infoWidth, headerYStart, { align: 'right', width: infoWidth });
+     
+  const contactInfo = `Tel: ${phone} | Email: ${email} | Web: ${website}`;
 
-/**
- * ✅ CORRECTION : PIED DE PAGE AVEC SIGNATURE (SANS SUPERPOSITION)
- */
-const drawFooter = (doc, pageNumber, totalPages, footerText, signaturePath = null) => {
-  const { colors } = CLUB_INFO;
-  const { margins, fonts, dimensions } = PDF_CONFIG;
-  
-  const footerY = dimensions.pageHeight - margins.bottom - 10;
-  
-  // ✅ SIGNATURE : Positionnée AVANT le pied de page (plus haut)
-  if (signaturePath && pageNumber === 1 && fs.existsSync(signaturePath)) {
-    try {
-      const signX = dimensions.pageWidth - margins.right - dimensions.signatureWidth - 20;
-      const signY = footerY - dimensions.signatureHeight - 120; // ✅ Plus haut pour éviter superposition
-      
-      doc.fontSize(fonts.small)
-         .fillColor(colors.textLight)
-         .font('Helvetica')
-         .text('Certification', signX, signY - 20, {
-           width: dimensions.signatureWidth + 20,
-           align: 'center'
-         });
-      
-      doc.rect(signX - 5, signY - 5, dimensions.signatureWidth + 10, dimensions.signatureHeight + 10)
-         .stroke(colors.border);
-      
-      doc.image(signaturePath, signX, signY, {
-        width: dimensions.signatureWidth,
-        height: dimensions.signatureHeight,
-        fit: [dimensions.signatureWidth, dimensions.signatureHeight]
-      });
-      
-      doc.fontSize(fonts.body)
-         .fillColor(colors.text)
-         .font('Helvetica-Bold')
-         .text(CLUB_INFO.signatory.name, signX - 10, signY + dimensions.signatureHeight + 8, {
-           width: dimensions.signatureWidth + 20,
-           align: 'center'
-         });
-      
-      doc.fontSize(fonts.small)
-         .fillColor(colors.textLight)
-         .font('Helvetica')
-         .text(CLUB_INFO.signatory.title, signX - 10, signY + dimensions.signatureHeight + 24, {
-           width: dimensions.signatureWidth + 20,
-           align: 'center'
-         });
-      
-      doc.fontSize(fonts.tiny)
-         .text(`Fait à ${PDF_TEXTS.receipt.location}, le ${formatDate(new Date(), 'medium')}`, 
-               signX - 10, signY + dimensions.signatureHeight + 38, {
-           width: dimensions.signatureWidth + 20,
-           align: 'center'
-         });
-      
-      doc.fontSize(fonts.tiny)
-         .fillColor(colors.primary)
-         .text(PDF_TEXTS.receipt.certification, 
-               margins.left, signY + dimensions.signatureHeight + 20, {
-           width: signX - margins.left - 40,
-           align: 'left'
-         });
-    } catch (error) {
-      console.warn('⚠️ Signature introuvable:', error.message);
-    }
-  }
-  
-  // Ligne séparatrice
-  doc.moveTo(margins.left, footerY)
-     .lineTo(dimensions.pageWidth - margins.right, footerY)
-     .strokeColor(colors.border)
-     .lineWidth(1)
-     .stroke();
-  
-  // Texte du pied de page
   doc.fontSize(fonts.tiny)
      .fillColor(colors.textMuted)
      .font('Helvetica')
-     .text(footerText, margins.left, footerY + 8, {
-       width: dimensions.pageWidth - margins.left - margins.right,
-       align: 'center'
-     });
+     .text(address, infoX - infoWidth, headerYStart + 12, { align: 'right', width: infoWidth })
+     .text(addressLine2, infoX - infoWidth, headerYStart + 20, { align: 'right', width: infoWidth })
+     .text(contactInfo, infoX - infoWidth, headerYStart + 28, { align: 'right', width: infoWidth });
+
+  // LIGNE DE SÉPARATION (En bas de l'en-tête)
+  doc.strokeColor(colors.borderDark)
+     .lineWidth(1)
+     .moveTo(margins.left, margins.top)
+     .lineTo(dimensions.pageWidth - margins.right, margins.top)
+     .stroke();
   
-  doc.fontSize(fonts.tiny)
-     .text(`Page ${pageNumber} sur ${totalPages}`, margins.left, footerY + 20, {
-       width: dimensions.pageWidth - margins.left - margins.right,
-       align: 'center'
-     });
+  let y = margins.top + 10;
   
-  const now = new Date();
-  doc.text(`Généré le ${formatDate(now, 'short')} à ${formatDate(now, 'time')}`, 
-           margins.left, footerY + 30, {
-       width: dimensions.pageWidth - margins.left - margins.right,
-       align: 'center'
-     });
+  // TITRE
+  doc.fontSize(fonts.title)
+     .fillColor(colors.primary)
+     .font('Helvetica-Bold')
+     .text(title, margins.left, y, { align: 'left' });
+  
+  y += 28;
+  
+  // SOUS-TITRE
+  doc.fontSize(fonts.subheading)
+     .fillColor(colors.textLight)
+     .font('Helvetica-Oblique')
+     .text(subtitle, margins.left, y, { align: 'left' });
+     
+  return y + 25; // Retourne la coordonnée Y après l'en-tête
 };
 
 /**
- * ✅ AMÉLIORATION : TABLEAU AVEC RETOUR À LA LIGNE AUTOMATIQUE POUR TOUTES LES COLONNES
+ * Dessiner le pied de page
  */
-const drawTable = (doc, headers, rows, startY, options = {}) => {
-  const { colors } = CLUB_INFO;
-  const { margins, fonts, dimensions, table } = PDF_CONFIG;
+const drawFooter = (doc, currentPage, totalPages, footerText, signaturePath) => {
+  const { margins, fonts, dimensions } = PDF_CONFIG;
+  const { colors, signatory } = CLUB_INFO;
   
-  const {
-    columnWidths = null,
-    headerBg = colors.primary,
-    headerTextColor = '#FFFFFF',
-    rowBg1 = colors.bgWhite,
-    rowBg2 = colors.bgLight,
-    borderColor = colors.border,
-    fontSize = fonts.small,
-    padding = table.padding,
-    alignRight = []
-  } = options;
+  const footerY = dimensions.pageHeight - margins.bottom;
   
-  let y = startY;
-  const tableWidth = dimensions.pageWidth - margins.left - margins.right;
-  const colCount = headers.length;
-  const colWidths = columnWidths || Array(colCount).fill(tableWidth / colCount);
+  // LIGNE DE SÉPARATION
+  doc.strokeColor(colors.borderDark)
+     .lineWidth(1)
+     .moveTo(margins.left, footerY - 5)
+     .lineTo(dimensions.pageWidth - margins.right, footerY - 5)
+     .stroke();
   
-  // EN-TÊTES
-  let x = margins.left;
-  doc.rect(margins.left, y, tableWidth, table.headerHeight)
-     .fillAndStroke(headerBg, colors.borderDark);
-  
-  doc.fontSize(fonts.body)
-     .fillColor(headerTextColor)
-     .font('Helvetica-Bold');
+  // ZONE DE TEXTE GAUCHE (texte du footer)
+  doc.fontSize(fonts.small)
+     .fillColor(colors.textMuted)
+     .font('Helvetica-Oblique')
+     .text(footerText, margins.left, footerY + 5, {
+       width: dimensions.pageWidth / 2 - margins.left,
+       align: 'left'
+     });
      
-  headers.forEach((header, i) => {
-    const align = alignRight.includes(i) ? 'right' : 'left';
-    doc.text(header, x + padding, y + (table.headerHeight - fonts.body) / 2, {
-      width: colWidths[i] - padding * 2,
-      align: align
-    });
-    x += colWidths[i];
+  // Date de génération (alignée à droite)
+  const dateText = `Généré le ${formatDate(new Date(), 'fullDateWithTime')}`;
+  doc.text(dateText, dimensions.pageWidth / 2, footerY + 5, {
+      width: dimensions.pageWidth / 2 - margins.right,
+      align: 'right'
   });
   
-  y += table.headerHeight;
-  
-  // LIGNES
-  doc.fontSize(fontSize)
-     .fillColor(colors.text)
-     .font('Helvetica');
-  
-  rows.forEach((row, rowIndex) => {
-    x = margins.left;
+  // NUMÉRO DE PAGE (Centre)
+  doc.fontSize(fonts.small)
+     .fillColor(colors.textMuted)
+     .font('Helvetica')
+     .text(`Page ${currentPage} sur ${totalPages}`, 0, footerY + 5, {
+       align: 'center',
+       width: dimensions.pageWidth
+     });
+     
+  // SECTION SIGNATURE
+  if (signaturePath) {
+    const signatureY = footerY - 100; 
+    const signatureWidth = dimensions.signatureWidth || 100;
+    const signatureHeight = dimensions.signatureHeight || 40;
+    const signatureX = dimensions.pageWidth - margins.right - signatureWidth - 10;
     
-    // ✅ CORRECTION : Calculer hauteur exacte pour CHAQUE cellule avec heightOfString
-    let maxHeight = table.rowHeight;
-    row.forEach((cell, cellIndex) => {
-      const cellText = cell === null || cell === undefined ? '' : String(cell);
-      
-      // ✅ Utiliser heightOfString pour obtenir la hauteur réelle du texte avec retour à la ligne
-      const textHeight = doc.heightOfString(cellText, {
-        width: colWidths[cellIndex] - padding * 2,
-        lineBreak: true,
-        align: alignRight.includes(cellIndex) ? 'right' : 'left'
-      });
-      
-      const cellHeight = textHeight + padding * 2;
-      maxHeight = Math.max(maxHeight, cellHeight);
-    });
-    
-    // Nouvelle page si nécessaire
-    if (y + maxHeight > dimensions.pageHeight - margins.bottom - 100) {
-      doc.addPage();
-      y = margins.top;
-      
-      // Redessiner en-tête
-      x = margins.left;
-      doc.rect(margins.left, y, tableWidth, table.headerHeight)
-         .fillAndStroke(headerBg, colors.borderDark);
-      
-      doc.fontSize(fonts.body)
-         .fillColor(headerTextColor)
-         .font('Helvetica-Bold');
-         
-      headers.forEach((header, i) => {
-        const align = alignRight.includes(i) ? 'right' : 'left';
-        doc.text(header, x + padding, y + (table.headerHeight - fonts.body) / 2, {
-          width: colWidths[i] - padding * 2,
-          align: align
+    // IMAGE DE SIGNATURE
+    try {
+      if (fs.existsSync(signaturePath)) {
+        doc.image(signaturePath, signatureX, signatureY, {
+          width: signatureWidth,
+          height: signatureHeight
         });
-        x += colWidths[i];
-      });
-      
-      y += table.headerHeight;
-      x = margins.left;
-      
-      doc.fontSize(fontSize)
-         .fillColor(colors.text)
-         .font('Helvetica');
+      } else {
+         doc.rect(signatureX, signatureY, signatureWidth, signatureHeight)
+            .stroke(colors.danger)
+            .fill(colors.bgLight);
+         doc.fillColor(colors.danger)
+            .fontSize(fonts.tiny)
+            .text('Signature absente', signatureX, signatureY + signatureHeight / 2 - 5, { align: 'center', width: signatureWidth });
+      }
+    } catch (error) {
+       console.error("Erreur de rendu de la signature:", error);
     }
     
-    // Background alterné
-    const bgColor = rowIndex % 2 === 0 ? rowBg1 : rowBg2;
-    doc.rect(margins.left, y, tableWidth, maxHeight)
-       .fill(bgColor);
+    // Nom et Titre du Signataire
+    doc.fillColor(colors.text)
+       .font('Helvetica')
+       .fontSize(fonts.small)
+       .text(signatory.name, signatureX, signatureY + signatureHeight + 5, { align: 'center', width: signatureWidth });
     
-    doc.rect(margins.left, y, tableWidth, maxHeight)
-       .stroke(borderColor);
-    
-    // ✅ CORRECTION : Contenu cellules avec retour à la ligne automatique
-    doc.fillColor(colors.text);
-    row.forEach((cell, cellIndex) => {
-      const align = alignRight.includes(cellIndex) ? 'right' : 'left';
-      const cellText = cell === null || cell === undefined ? '' : String(cell);
-      
-      // ✅ Centrer verticalement le texte dans la cellule
-      const textHeight = doc.heightOfString(cellText, {
-        width: colWidths[cellIndex] - padding * 2,
-        lineBreak: true,
-        align: align
-      });
-      
-      const verticalOffset = Math.max(0, (maxHeight - textHeight) / 2);
-      
-      doc.text(cellText, x + padding, y + verticalOffset, {
-        width: colWidths[cellIndex] - padding * 2,
-        align: align,
-        lineBreak: true,
-        ellipsis: false
-      });
-      
-      // Bordure verticale entre colonnes
-      if (cellIndex < row.length - 1) {
-        doc.moveTo(x + colWidths[cellIndex], y)
-           .lineTo(x + colWidths[cellIndex], y + maxHeight)
-           .stroke(borderColor);
-      }
-      
-      x += colWidths[cellIndex];
-    });
-    
-    y += maxHeight;
-  });
-  
-  doc.rect(margins.left, startY, tableWidth, y - startY)
-     .stroke(colors.borderDark);
-  
-  return y + 20;
+    doc.fontSize(fonts.tiny)
+       .text(signatory.title, signatureX, signatureY + signatureHeight + 15, { align: 'center', width: signatureWidth });
+  }
 };
 
+
 /**
- * SECTION D'INFORMATIONS
+ * Dessiner une section d'informations (clés/valeurs)
  */
-const drawInfoSection = (doc, title, data, startY, options = {}) => {
-  const { colors } = CLUB_INFO;
+const drawInfoSection = (doc, title, infoMap, startY, options = {}) => {
   const { margins, fonts, dimensions } = PDF_CONFIG;
-  const { bordered = true, bgColor = colors.bgLight } = options;
+  const { colors } = CLUB_INFO;
+  const defaultOptions = { 
+    bordered: false, 
+    bgColor: colors.bgLight, 
+    keyColor: colors.textLight, 
+    valueColor: colors.text 
+  };
+  const finalOptions = { ...defaultOptions, ...options };
   
-  let y = startY;
-  const contentWidth = dimensions.pageWidth - margins.left - margins.right;
+  const width = dimensions.pageWidth - margins.left - margins.right;
+  let currentY = startY;
   
-  if (bordered) {
-    const sectionHeight = Object.keys(data).length * 20 + 40;
-    doc.rect(margins.left, y, contentWidth, sectionHeight)
-       .fillAndStroke(bgColor, colors.border);
-    y += 12;
-  }
-  
+  // Titre de la section
   doc.fontSize(fonts.subheading)
      .fillColor(colors.primary)
      .font('Helvetica-Bold')
-     .text(title, margins.left + 10, y);
+     .text(title, margins.left, currentY);
+     
+  currentY += 18;
   
-  y += 25;
+  const colCount = 2; // Toujours 2 colonnes pour l'info
+  const colWidth = width / colCount;
+  const lineHeight = fonts.body + 5;
   
-  doc.fontSize(fonts.body)
-     .fillColor(colors.text)
-     .font('Helvetica');
+  // Calculer la hauteur totale nécessaire pour le fond
+  const keys = Object.keys(infoMap);
+  const totalRows = Math.ceil(keys.length / colCount);
+  const contentHeight = totalRows * lineHeight + 15;
   
-  const entries = Object.entries(data);
-  const midPoint = Math.ceil(entries.length / 2);
-  const leftCol = margins.left + 15;
-  const rightCol = dimensions.pageWidth / 2 + 10;
-  
-  entries.forEach(([key, value], index) => {
-    const x = index < midPoint ? leftCol : rightCol;
-    const localY = index < midPoint ? y + (index * 18) : y + ((index - midPoint) * 18);
-    
-    doc.fillColor(colors.textLight)
-       .font('Helvetica')
-       .text(`${key}:`, x, localY, { width: 100, continued: true })
-       .fillColor(colors.text)
-       .font('Helvetica-Bold')
-       .text(` ${value}`, { width: 150 });
-  });
-  
-  return y + Math.max(midPoint, entries.length - midPoint) * 18 + 20;
-};
-
-/**
- * BOÎTE DE RÉSUMÉ
- */
-const drawSummaryBox = (doc, items, x, y, width, options = {}) => {
-  const { colors } = CLUB_INFO;
-  const { fonts } = PDF_CONFIG;
-  const { title = 'Résumé', layout = 'horizontal' } = options;
-  
-  const boxHeight = layout === 'horizontal' ? 80 : items.length * 35 + 30;
-  
-  doc.rect(x, y, width, boxHeight)
-     .fill(colors.bgLight);
-  
-  doc.rect(x, y, width, boxHeight)
-     .stroke(colors.primary);
-  
-  doc.rect(x, y, width, 5)
-     .fill(colors.primary);
-  
-  let currentY = y + 15;
-  
-  if (title) {
-    doc.fontSize(fonts.subheading)
-       .fillColor(colors.primary)
-       .font('Helvetica-Bold')
-       .text(title, x + 15, currentY, { width: width - 30 });
-    currentY += 25;
+  if (finalOptions.bordered) {
+    doc.rect(margins.left, currentY - 5, width, contentHeight)
+       .fillAndStroke(finalOptions.bgColor, colors.border);
   }
   
-  if (layout === 'horizontal') {
-    const itemWidth = (width - 40) / items.length;
-    let itemX = x + 20;
+  let leftY = currentY + 5;
+  let rightY = currentY + 5;
+  
+  keys.forEach((key, index) => {
+    const value = infoMap[key];
+    
+    const isLeftColumn = index % colCount === 0;
+    const yPosition = isLeftColumn ? leftY : rightY;
+    const xStart = isLeftColumn ? margins.left : margins.left + colWidth;
+    const padding = 10;
+    
+    doc.fillColor(finalOptions.keyColor)
+         .font('Helvetica')
+         .fontSize(fonts.body)
+         .text(`${key}:`, xStart + padding, yPosition, { width: 100, continued: false });
+         
+    doc.fillColor(finalOptions.valueColor)
+       .font('Helvetica-Bold')
+       .text(value, xStart + 115, yPosition, { width: colWidth - 125 });
+         
+    if (isLeftColumn) {
+      leftY += lineHeight;
+    } else {
+      rightY += lineHeight;
+    }
+  });
+  
+  return currentY + contentHeight + 15; 
+};
+
+
+/**
+ * Dessiner un encadré de résumé (statistiques)
+ * AMÉLIORATION: Design simplifié sans symboles Unicode qui posent problème.
+ */
+const drawSummaryBox = (doc, items, x, y, width, options = {}) => {
+  const { fonts } = PDF_CONFIG;
+  const { colors } = CLUB_INFO;
+  const defaultOptions = { 
+    title: 'Résumé', 
+    layout: 'horizontal', 
+    titleColor: colors.primary,
+    bgColor: colors.bgLight,
+    borderColor: colors.border
+  };
+  const finalOptions = { ...defaultOptions, ...options };
+
+  let currentY = y;
+  
+  // Dessiner le fond (horizontal)
+  if (finalOptions.layout === 'horizontal') {
+    const boxHeight = 70;
+    doc.rect(x, currentY - 5, width, boxHeight)
+       .fillAndStroke(finalOptions.bgColor, finalOptions.borderColor);
+    
+    const itemWidth = width / items.length;
+    let itemX = x;
     
     items.forEach((item, index) => {
+      const labelColor = item.color || colors.textLight;
+
       if (index > 0) {
-        doc.moveTo(itemX - 10, currentY - 5)
-           .lineTo(itemX - 10, currentY + 35)
+        // Ligne de séparation verticale
+        doc.moveTo(itemX, currentY - 5)
+           .lineTo(itemX, currentY + boxHeight - 5)
            .stroke(colors.border);
       }
       
+      // Label: centré sur le quart supérieur
       doc.fontSize(fonts.small)
-         .fillColor(colors.textLight)
+         .fillColor(labelColor)
          .font('Helvetica')
-         .text(item.label, itemX, currentY, { width: itemWidth - 10, align: 'center' });
+         .text(item.label, itemX + 10, currentY + 12, { width: itemWidth - 20, align: 'center' });
       
+      // Valeur: centré sur le quart inférieur
       doc.fontSize(fonts.heading)
          .fillColor(item.color || colors.text)
          .font('Helvetica-Bold')
-         .text(item.value, itemX, currentY + 18, { width: itemWidth - 10, align: 'center' });
+         // Suppression de item.icon ici pour éviter les symboles bizarres
+         .text(item.value, itemX + 10, currentY + 33, { width: itemWidth - 20, align: 'center' });
       
       itemX += itemWidth;
     });
+    
+    return currentY + boxHeight + 15;
+    
   } else {
-    items.forEach((item, index) => {
-      doc.fontSize(fonts.body)
-         .fillColor(colors.textLight)
-         .font('Helvetica')
-         .text(item.label, x + 20, currentY, { width: width - 140, continued: true });
-      
-      doc.fillColor(item.color || colors.text)
-         .font('Helvetica-Bold')
-         .text(item.value, { align: 'right', width: 100 });
-      
-      currentY += 30;
-      
-      if (index < items.length - 1) {
-        doc.moveTo(x + 20, currentY - 5)
-           .lineTo(x + width - 20, currentY - 5)
-           .stroke(colors.border);
-      }
-    });
+    // Layout vertical
+    return currentY + 10;
   }
+};
+
+
+/**
+ * Dessiner un tableau
+ */
+const drawTable = (doc, headers, rows, startY, options = {}) => {
+  const { margins, fonts, dimensions, table } = PDF_CONFIG;
+  const { colors } = CLUB_INFO;
   
-  return y + boxHeight + 20;
+  const defaultOptions = { 
+    columnWidths: [],
+    fontSize: fonts.body,
+    alignRight: [],
+    alignCenter: [],
+    ...table 
+  };
+  const finalOptions = { ...defaultOptions, ...options };
+  
+  const tableWidth = finalOptions.columnWidths.reduce((sum, w) => sum + w, 0);
+  const startX = margins.left + (dimensions.pageWidth - margins.left - margins.right - tableWidth) / 2;
+  let currentY = startY;
+  
+  const headerHeight = finalOptions.headerHeight;
+
+  // --- FONCTION DE REDESSIN DE L'EN-TÊTE ---
+  const drawTableHeaders = (y) => {
+      doc.rect(startX, y, tableWidth, headerHeight)
+         .fillAndStroke(colors.primaryLight, colors.borderDark);
+         
+      let currentX = startX;
+      doc.fontSize(finalOptions.fontSize)
+         .fillColor(colors.primary)
+         .font('Helvetica-Bold');
+         
+      headers.forEach((header, index) => {
+        const colWidth = finalOptions.columnWidths[index];
+        doc.text(header, currentX + finalOptions.padding, y + finalOptions.padding, {
+          width: colWidth - finalOptions.padding * 2,
+          align: finalOptions.alignCenter.includes(index) ? 'center' : (finalOptions.alignRight.includes(index) ? 'right' : 'left'),
+        });
+        
+        // Bordures verticales
+        if (index < headers.length - 1) {
+          doc.strokeColor(colors.borderDark)
+             .lineWidth(finalOptions.borderWidth)
+             .moveTo(currentX + colWidth, y)
+             .lineTo(currentX + colWidth, y + headerHeight)
+             .stroke();
+        }
+        currentX += colWidth;
+      });
+      return y + headerHeight;
+  };
+  
+  // Dessiner l'en-tête initial
+  currentY = drawTableHeaders(currentY);
+  
+  // --- LIGNES DE DONNÉES ---
+  doc.fontSize(finalOptions.fontSize)
+     .fillColor(colors.text)
+     .font('Helvetica');
+     
+  rows.forEach((row, i) => {
+    // 1. Calculer la hauteur de ligne 
+    let maxHeight = finalOptions.rowHeight;
+    
+    if (finalOptions.rowHeightAuto) {
+        maxHeight = row.reduce((maxH, cellText, cellIndex) => {
+            const cellWidth = finalOptions.columnWidths[cellIndex] - finalOptions.padding * 2;
+            
+            const requiredHeight = doc.heightOfString(String(cellText), {
+                width: cellWidth,
+                align: finalOptions.alignCenter.includes(cellIndex) ? 'center' : (finalOptions.alignRight.includes(cellIndex) ? 'right' : 'left'),
+            });
+            
+            return Math.max(maxH, requiredHeight + finalOptions.padding * 2); 
+        }, maxHeight); 
+    }
+
+    // 2. Vérifier le saut de page
+    if (currentY + maxHeight > dimensions.pageHeight - margins.bottom - headerHeight) { 
+      doc.addPage();
+      currentY = margins.top;
+      currentY = drawTableHeaders(currentY); 
+    }
+    
+    // 3. Remplissage et Dessin du Contenu
+    const rowColor = (finalOptions.alternateRows && i % 2 === 0) ? colors.bgLight : colors.bgWhite;
+    doc.rect(startX, currentY, tableWidth, maxHeight)
+       .fill(rowColor);
+       
+    let currentX = startX;
+    
+    row.forEach((cellText, index) => {
+      const colWidth = finalOptions.columnWidths[index];
+      const textX = currentX + finalOptions.padding;
+      const textY = currentY + finalOptions.padding;
+      
+      // Réinitialiser les styles
+      doc.fillColor(colors.text)
+         .font('Helvetica');
+      
+      // Styles pour Statut/Cotisation/Abonnement
+      if (headers[index].includes('Statut') || headers[index].includes('Cotisation') || headers[index].includes('Abonnement')) {
+          const statusText = String(cellText).replace(/[✓✗]/g, '').trim();
+          const colorMap = { 
+              'Payée': colors.success, 'Payé': colors.success, 
+              'Validée': colors.success,
+              'Avance': colors.warning, 
+              'En attente': colors.danger, 
+              'Annulée': colors.danger,
+              'Inactif': colors.textLight,
+              'Actif': colors.success 
+          };
+          const statusColor = colorMap[statusText] || colors.text;
+          
+          doc.fillColor(statusColor)
+             .font('Helvetica-Bold');
+      } else if (finalOptions.alignRight.includes(index)) {
+        // Style pour les montants (à droite)
+         doc.font('Helvetica-Bold');
+      }
+
+      doc.text(String(cellText), textX, textY, {
+        width: colWidth - finalOptions.padding * 2,
+        align: finalOptions.alignCenter.includes(index) ? 'center' : (finalOptions.alignRight.includes(index) ? 'right' : 'left'),
+      });
+      
+      // Bordures verticales
+      if (index < headers.length - 1) {
+        doc.strokeColor(colors.borderDark)
+           .lineWidth(finalOptions.borderWidth)
+           .moveTo(currentX + colWidth, currentY)
+           .lineTo(currentX + colWidth, currentY + maxHeight)
+           .stroke();
+      }
+      
+      currentX += colWidth;
+    });
+    
+    // Bordure horizontale (bas de ligne)
+    doc.strokeColor(colors.borderDark)
+       .lineWidth(finalOptions.borderWidth)
+       .moveTo(startX, currentY + maxHeight)
+       .lineTo(startX + tableWidth, currentY + maxHeight)
+       .stroke();
+       
+    currentY += maxHeight;
+  });
+  
+  return currentY; 
+};
+
+
+/**
+ * Tronquer une chaîne de caractères
+ */
+const truncateText = (text, maxLength) => {
+  if (!text) return '';
+  return String(text).length > maxLength ? String(text).substring(0, maxLength - 3) + '...' : String(text);
+};
+
+/**
+ * Extraire le nom du membre pour les transactions
+ */
+const extractMemberName = (transaction) => {
+  if (transaction.member_name) return transaction.member_name;
+  if (transaction.adherent_name) return transaction.adherent_name;
+  return 'N/A';
 };
 
 module.exports = {
@@ -615,6 +508,5 @@ module.exports = {
   drawInfoSection,
   drawSummaryBox,
   truncateText,
-  wrapText,
   extractMemberName
 };

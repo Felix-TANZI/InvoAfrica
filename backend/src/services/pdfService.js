@@ -1,10 +1,13 @@
-/*   Projet : InvoAfrica
+/* Projet : InvoAfrica
      @Auteur : NZIKO Felix Andre
-     version : beta 2.0 - PDF Service COMPLET */
+     version : beta 2.2 - PDF Service FINAL (CORRIGÉ) */
 
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
-const { ASSETS_PATH } = require('../config/pdfConfig');
+// Assurez-vous d'avoir 'moment' installé: npm install moment
+const moment = require('moment'); 
+const { ASSETS_PATH, PDF_CONFIG } = require('../config/pdfConfig'); 
+moment.locale('fr');
 
 const {
   generateReceiptPDF,
@@ -25,9 +28,12 @@ class PDFService {
    * Créer un nouveau document PDF
    */
   static createDocument() {
+    // CORRECTION CRITIQUE: Créer un objet Date() pour pdfkit.info
+    const docCreationDate = new Date(); 
+    
     return new PDFDocument({
       size: 'A4',
-      margin: 50,
+      margin: PDF_CONFIG.margins.left, 
       bufferPages: true,
       autoFirstPage: false,
       compress: true,
@@ -35,7 +41,9 @@ class PDFService {
         Title: 'Document Club GI',
         Author: 'Club Génie Informatique',
         Subject: 'Document généré automatiquement',
-        Creator: 'InvoAfrica System'
+        Creator: 'InvoAfrica System',
+        // Utiliser l'objet Date JavaScript ici
+        CreationDate: docCreationDate 
       }
     });
   }
@@ -48,9 +56,9 @@ class PDFService {
       try {
         const chunks = [];
         
-        doc.on('data', (chunk) => chunks.push(chunk));
+        doc.on('data', chunk => chunks.push(chunk));
         doc.on('end', () => resolve(Buffer.concat(chunks)));
-        doc.on('error', reject);
+        doc.on('error', err => reject(err));
         
         doc.end();
       } catch (error) {
@@ -59,72 +67,50 @@ class PDFService {
     });
   }
 
-  /**
-   * Générer un reçu de transaction
-   */
+  // Les fonctions de génération sont inchangées...
+  
   static async generateReceipt(transaction) {
     const doc = this.createDocument();
     await generateReceiptPDF(doc, transaction);
     return doc;
   }
-
-  /**
-   * Générer une liste de transactions
-   */
+  
   static async generateTransactionList(transactions, filters, statistics) {
     const doc = this.createDocument();
     await generateTransactionListPDF(doc, transactions, filters, statistics);
     return doc;
   }
-
-  /**
-   * Générer un rapport financier
-   */
+  
   static async generateFinancialReport(data) {
     const doc = this.createDocument();
     await generateFinancialReportPDF(doc, data);
     return doc;
   }
-
-  /**
-   * Générer un relevé de membre
-   */
+  
   static async generateMemberStatement(member, contributions) {
     const doc = this.createDocument();
     await generateMemberStatementPDF(doc, member, contributions);
     return doc;
   }
-
-  /**
-   * ✅ NOUVEAU : Générer la liste des Team Members
-   */
+  
   static async generateTeamMembersList(teamMembers, filters) {
     const doc = this.createDocument();
     await generateTeamMembersPDF(doc, teamMembers, filters);
     return doc;
   }
 
-  /**
-   * ✅ NOUVEAU : Générer la liste des Adhérents
-   */
   static async generateAdherentsList(adherents, filters) {
     const doc = this.createDocument();
     await generateAdherentsPDF(doc, adherents, filters);
     return doc;
   }
 
-  /**
-   * ✅ NOUVEAU : Générer la liste des cotisations Team
-   */
   static async generateTeamContributionsList(contributions, filters) {
     const doc = this.createDocument();
     await generateTeamContributionsPDF(doc, contributions, filters);
     return doc;
   }
 
-  /**
-   * ✅ NOUVEAU : Générer la liste des abonnements Adhérents
-   */
   static async generateAdherentContributionsList(contributions, filters) {
     const doc = this.createDocument();
     await generateAdherentContributionsPDF(doc, contributions, filters);
@@ -142,12 +128,9 @@ class PDFService {
     console.log(`  Logo: ${logoExists ? '✅' : '❌'} (${ASSETS_PATH.logo})`);
     console.log(`  Signature: ${signatureExists ? '✅' : '❌'} (${ASSETS_PATH.signature})`);
     
-    return {
-      logo: logoExists,
-      signature: signatureExists,
-      logoPath: ASSETS_PATH.logo,
-      signaturePath: ASSETS_PATH.signature
-    };
+    if (!logoExists || !signatureExists) {
+        console.warn("⚠️ AVERTISSEMENT: Certains assets (Logo/Signature) sont manquants. Le PDF affichera des placeholders.");
+    }
   }
 }
 
